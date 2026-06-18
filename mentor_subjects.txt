@@ -1,0 +1,9 @@
+CREATE TABLE `Mentor_Subjects` (
+  `mentor_id` int(11) NOT NULL,
+  `category_id` int(11) NOT NULL,
+  `experience_years` int(11) DEFAULT '0',
+  PRIMARY KEY (`mentor_id`,`category_id`) /*T![clustered_index] CLUSTERED */,
+  KEY `fk_2` (`category_id`),
+  CONSTRAINT `fk_1` FOREIGN KEY (`mentor_id`) REFERENCES `pilas_tutorias`.`Users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_2` FOREIGN KEY (`category_id`) REFERENCES `pilas_tutorias`.`Categories` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
