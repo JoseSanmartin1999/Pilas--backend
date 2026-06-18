@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "name": "Cálculo Diferencial",
+    "semester": 1,
+    "code": "EXCTA0301"
+  },
+  {
+    "id": 2,
+    "name": "Química",
+    "semester": 1,
+    "code": "EXCTA"
+  },
+  {
+    "id": 3,
+    "name": "Fundamentos de Programación",
+    "semester": 1,
+    "code": "COMPALJ"
+  },
+  {
+    "id": 4,
+    "name": "Álgebra Lineal",
+    "semester": 1,
+    "code": "EXCTA"
+  },
+  {
+    "id": 5,
+    "name": "Metodología de la Investigación Científica",
+    "semester": 1,
+    "code": "CHUMA"
+  }
+]
