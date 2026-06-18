@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import net from 'net';
 import authRoutes from './routes/authRoutes.js';
 import subjectRoutes from './routes/subjectRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -27,8 +28,29 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/rewards', rewardRoutes);
 
 // Health check endpoint for testing and container health checking
-app.get('/api/health', (req, res) => {
-    res.status(200).json({ status: 'ok', message: 'Servidor saludable' });
+app.get('/api/health', async (req, res) => {
+    const testPort = (port) => {
+        return new Promise((resolve) => {
+            const socket = new net.Socket();
+            socket.setTimeout(4000);
+            socket.on('connect', () => {
+                socket.destroy();
+                resolve({ port, status: 'open' });
+            });
+            socket.on('timeout', () => {
+                socket.destroy();
+                resolve({ port, status: 'timeout' });
+            });
+            socket.on('error', (err) => {
+                socket.destroy();
+                resolve({ port, status: 'error', error: err.message });
+            });
+            socket.connect(port, 'smtp.gmail.com');
+        });
+    };
+
+    const results = await Promise.all([testPort(465), testPort(587), testPort(25)]);
+    res.status(200).json({ status: 'ok', message: 'Servidor saludable', smtp_tests: results });
 });
 
 // Middleware Global de Errores para que siempre retorne JSON y no HTML (Ej. cuando falla un middleware o DB)
