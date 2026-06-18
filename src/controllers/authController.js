@@ -204,7 +204,7 @@ export const forgotPassword = async (req, res) => {
             await sendPasswordResetEmail(email, code);
         } catch (mailErr) {
             console.error("Error al enviar correo de recuperación:", mailErr);
-            return res.status(500).json({ message: "No se pudo enviar el correo de recuperación. Por favor, verifica tu conexión o inténtalo más tarde." });
+            return res.status(500).json({ message: `No se pudo enviar el correo de recuperación. Detalle: ${mailErr.message}. Asegúrate de configurar las variables de entorno en Render.` });
         }
 
         res.json({ message: "Código de recuperación enviado al correo." });
@@ -315,7 +315,7 @@ export const resendVerificationCode = async (req, res) => {
             await sendEmailVerificationEmail(email, code);
         } catch (mailErr) {
             console.error("Error al enviar correo de verificación:", mailErr);
-            return res.status(500).json({ message: "No se pudo enviar el correo de verificación. Por favor, verifica tu conexión o inténtalo más tarde." });
+            return res.status(500).json({ message: `No se pudo enviar el correo de verificación. Detalle: ${mailErr.message}. Asegúrate de configurar las variables de entorno en Render.` });
         }
 
         res.json({ message: "Nuevo código de verificación enviado al correo." });
