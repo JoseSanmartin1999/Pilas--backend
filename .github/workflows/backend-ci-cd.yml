@@ -25,9 +25,12 @@ jobs:
       # Notificación inicio
       # ==========================
       - name: Notify Telegram - Pipeline Started
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_TO }}" \
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
+          -d chat_id="$TELEGRAM_TO" \
           -d text="🚀 CI/CD PIPELINE INICIADO
 
           📦 Proyecto: Backend Pilas
@@ -111,8 +114,10 @@ jobs:
       # ==========================
       - name: Deploy to Render
         id: deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          curl -s -X POST "$RENDER_DEPLOY_HOOK"
 
       # ==========================
       # Esperar despliegue
@@ -125,9 +130,12 @@ jobs:
       # ==========================
       - name: Notify Telegram Success
         if: success()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_TO }}" \
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
+          -d chat_id="$TELEGRAM_TO" \
           -d text="✅ PIPELINE COMPLETADO
 
           📦 Proyecto: Backend Pilas
@@ -148,9 +156,12 @@ jobs:
       # ==========================
       - name: Notify Telegram Failure
         if: failure() || cancelled()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-          -d chat_id="${{ secrets.TELEGRAM_TO }}" \
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
+          -d chat_id="$TELEGRAM_TO" \
           -d text="❌ PIPELINE DETENIDO o FALLIDO
 
           📦 Proyecto: Backend Pilas
