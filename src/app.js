@@ -26,6 +26,11 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/rewards', rewardRoutes);
 
+// Health check endpoint for testing and container health checking
+app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Servidor saludable' });
+});
+
 // Middleware Global de Errores para que siempre retorne JSON y no HTML (Ej. cuando falla un middleware o DB)
 app.use((err, req, res, next) => {
     console.error("Error global interceptado:", err);
