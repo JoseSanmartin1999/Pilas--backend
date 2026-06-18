@@ -19,20 +19,20 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
+          MESSAGE="🚀 <b>CI/CD PIPELINE INICIADO</b>"
+          MESSAGE+=$'\n\n'"📦 <b>Proyecto:</b> Backend Pilas"
+          MESSAGE+=$'\n'"🌿 <b>Rama:</b> ${{ github.ref_name }}"
+          MESSAGE+=$'\n'"👤 <b>Usuario:</b> ${{ github.actor }}"
+          MESSAGE+=$'\n\n'"Se ejecutarán las siguientes fases:"
+          MESSAGE+=$'\n'"🌿 • <b>Validación de Flujo de Ramas (PRs)</b>"
+          MESSAGE+=$'\n'"🧪 • <b>Pruebas Unitarias y Cobertura</b>"
+          MESSAGE+=$'\n'"🔍 • <b>Análisis de Calidad (SonarCloud)</b>"
+          MESSAGE+=$'\n'"🚀 • <b>Despliegue a Producción (Render)</b>"
+
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_TO }}" \
             -d parse_mode="HTML" \
-            --data-urlencode "text=🚀 <b>CI/CD PIPELINE INICIADO</b>
-
-📦 <b>Proyecto:</b> Backend Pilas
-🌿 <b>Rama:</b> ${{ github.ref_name }}
-👤 <b>Usuario:</b> ${{ github.actor }}
-
-Se ejecutarán las siguientes fases:
-🌿 • <b>Validación de Flujo de Ramas (PRs)</b>
-🧪 • <b>Pruebas Unitarias y Cobertura</b>
-🔍 • <b>Análisis de Calidad (SonarCloud)</b>
-🚀 • <b>Despliegue a Producción (Render)</b>"
+            --data-urlencode "text=$MESSAGE"
 
   validate-branch:
     name: Validate Branch Flow
@@ -130,20 +130,17 @@ Se ejecutarán las siguientes fases:
           fi
 
           # Construir el mensaje con formato HTML para Telegram
-          MESSAGE="<b>$OVERALL_EMOJI $OVERALL_TEXT</b>
-
-📦 <b>Proyecto:</b> Backend Pilas
-🌿 <b>Rama:</b> ${{ github.ref_name }}
-👤 <b>Usuario:</b> ${{ github.actor }}
-🟢 <b>Estado General:</b> $OVERALL_STATUS
-
-📊 <b>Resumen por Fases:</b>
-🌿 • <b>Validación de Ramas:</b> $VALIDATE_STATUS
-🧪 • <b>Pruebas Unitarias:</b> $TEST_STATUS
-🔍 • <b>SonarCloud / Quality Gate:</b> $SONAR_STATUS
-🚀 • <b>Despliegue Render:</b> $DEPLOY_STATUS
-
-🔗 <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Ver detalles en GitHub Actions</a>"
+          MESSAGE="<b>$OVERALL_EMOJI $OVERALL_TEXT</b>"
+          MESSAGE+=$'\n\n'"📦 <b>Proyecto:</b> Backend Pilas"
+          MESSAGE+=$'\n'"🌿 <b>Rama:</b> ${{ github.ref_name }}"
+          MESSAGE+=$'\n'"👤 <b>Usuario:</b> ${{ github.actor }}"
+          MESSAGE+=$'\n'"🟢 <b>Estado General:</b> $OVERALL_STATUS"
+          MESSAGE+=$'\n\n'"📊 <b>Resumen por Fases:</b>"
+          MESSAGE+=$'\n'"🌿 • <b>Validación de Ramas:</b> $VALIDATE_STATUS"
+          MESSAGE+=$'\n'"🧪 • <b>Pruebas Unitarias:</b> $TEST_STATUS"
+          MESSAGE+=$'\n'"🔍 • <b>SonarCloud / Quality Gate:</b> $SONAR_STATUS"
+          MESSAGE+=$'\n'"🚀 • <b>Despliegue Render:</b> $DEPLOY_STATUS"
+          MESSAGE+=$'\n\n'"🔗 <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Ver detalles en GitHub Actions</a>"
 
           # Enviar mensaje a Telegram
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
