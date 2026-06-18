@@ -8,7 +8,14 @@ import redis from '../config/redis.js';
 export const awardXPAndCoins = async (userId, xpAmount, coinsAmount) => {
     try {
         // 1. Obtener datos actuales del usuario
-        const [rows] = await db.query("SELECT xp, level, espe_coins, role FROM Users WHERE id = ?", [userId]);
+        const [rows] = await db.query(`
+            SELECT p.xp, p.level, p.espe_coins, r.name as role 
+            FROM Users u
+            LEFT JOIN Profiles p ON u.id = p.user_id
+            LEFT JOIN User_Roles ur ON u.id = ur.user_id
+            LEFT JOIN Roles r ON ur.role_id = r.id
+            WHERE u.id = ?
+        `, [userId]);
         if (rows.length === 0) return null;
         const user = rows[0];
 
@@ -21,7 +28,7 @@ export const awardXPAndCoins = async (userId, xpAmount, coinsAmount) => {
 
         // 2. Actualizar en la base de datos
         await db.query(
-            "UPDATE Users SET xp = ?, level = ?, espe_coins = ? WHERE id = ?",
+            "UPDATE Profiles SET xp = ?, level = ?, espe_coins = ? WHERE user_id = ?",
             [newXp, newLevel, newCoins, userId]
         );
 
@@ -79,7 +86,7 @@ export const checkAndAwardBadges = async (userId) => {
         const totalPerfect = perfectRows[0].count;
 
         // Obtener datos del usuario
-        const [userRows] = await db.query("SELECT xp, bio, profile_photo_url FROM Users WHERE id = ?", [userId]);
+        const [userRows] = await db.query("SELECT xp, bio, profile_photo_url FROM Profiles WHERE user_id = ?", [userId]);
         if (userRows.length === 0) return [];
         const user = userRows[0];
         const currentXp = user.xp || 0;
@@ -177,10 +184,12 @@ export const getTopMentors = async () => {
                 const userId = top[i];
                 const score = parseFloat(top[i+1]);
                 
-                const [userRows] = await db.query(
-                    "SELECT id, full_name, profile_photo_url, career, current_semester FROM Users WHERE id = ?",
-                    [userId]
-                );
+                const [userRows] = await db.query(`
+                    SELECT u.id, p.full_name, p.profile_photo_url, p.career, p.current_semester 
+                    FROM Users u
+                    JOIN Profiles p ON u.id = p.user_id
+                    WHERE u.id = ?
+                `, [userId]);
                 
                 if (userRows.length > 0) {
                     formatted.push({
@@ -197,9 +206,15 @@ export const getTopMentors = async () => {
     }
 
     // Fallback: Consulta directa a la base de datos
-    const [dbRows] = await db.query(
-        `SELECT id, full_name, profile_photo_url, career, current_semester, xp as score, xp 
-         FROM Users WHERE role = 'MENTOR' ORDER BY xp DESC LIMIT 10`
-    );
+    const [dbRows] = await db.query(`
+        SELECT u.id, p.full_name, p.profile_photo_url, p.career, p.current_semester, p.xp as score, p.xp 
+        FROM Users u
+        JOIN Profiles p ON u.id = p.user_id
+        JOIN User_Roles ur ON u.id = ur.user_id
+        JOIN Roles r ON ur.role_id = r.id
+        WHERE r.name = 'MENTOR'
+        ORDER BY p.xp DESC
+        LIMIT 10
+    `);
     return dbRows;
 };

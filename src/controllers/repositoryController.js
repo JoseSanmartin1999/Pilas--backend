@@ -45,9 +45,10 @@ export const getMaterials = async (req, res) => {
         }
 
         const [materials] = await db.query(
-            `SELECT rm.*, u.full_name as uploader_name
+            `SELECT rm.*, p.full_name as uploader_name
              FROM Repository_Materials rm
              JOIN Users u ON rm.uploader_id = u.id
+             LEFT JOIN Profiles p ON u.id = p.user_id
              WHERE rm.mentorship_id = ?
              ORDER BY rm.created_at DESC`,
             [mentorshipId]
