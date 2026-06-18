@@ -4,11 +4,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD
     },
+    family: 4, // FORZAR IPv4 para evitar errores de red ENETUNREACH en servidores que no soportan IPv6 (como Render)
     connectionTimeout: 8000, // 8 segundos para evitar bloqueos eternos
     greetingTimeout: 8000,
     socketTimeout: 8000
