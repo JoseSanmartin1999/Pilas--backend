@@ -7,6 +7,8 @@ jobs:
   sonar:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout repository
@@ -15,7 +17,7 @@ jobs:
           fetch-depth: 0 # Desactivar clonación superficial (shallow clone) para análisis de SonarCloud
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: sonarsource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
@@ -24,9 +26,10 @@ jobs:
             -Dsonar.organization=josesanmartin1999
             -Dsonar.sources=src
             -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.verbose=true
 
       - name: SonarCloud Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+        uses: sonarsource/sonarqube-quality-gate-action@v2
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
