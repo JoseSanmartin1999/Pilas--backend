@@ -1,0 +1,167 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Build, Test and Deploy Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      # ==========================
+      # Checkout
+      # ==========================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ==========================
+      # Notificación inicio
+      # ==========================
+      - name: Notify Telegram - Pipeline Started
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+          -d chat_id="${{ secrets.TELEGRAM_TO }}" \
+          -d text="🚀 CI/CD PIPELINE INICIADO
+
+          📦 Proyecto: Backend Pilas
+          🌿 Rama: ${{ github.ref_name }}
+          👤 Usuario: ${{ github.actor }}
+
+          Se ejecutarán:
+          ✅ Instalación
+          ✅ Pruebas
+          ✅ SonarCloud
+          ✅ Build Validation
+          ✅ Deploy Render"
+
+      # ==========================
+      # Node.js
+      # ==========================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # ==========================
+      # Instalar dependencias
+      # ==========================
+      - name: Install dependencies
+        run: npm ci
+
+      # ==========================
+      # Ejecutar pruebas
+      # ==========================
+      - name: Run Tests
+        run: npm test
+
+      # ==========================
+      # SonarCloud Scan
+      # ==========================
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=JoseSanmartin1999_Pilas--backend
+            -Dsonar.organization=josesanmartin1999
+            -Dsonar.sources=src
+            -Dsonar.host.url=https://sonarcloud.io
+
+      # ==========================
+      # Quality Gate
+      # ==========================
+      - name: SonarCloud Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # ==========================
+      # Validación servidor
+      # ==========================
+      - name: Validate server entrypoint
+        run: |
+          test -f src/server.js
+
+      # ==========================
+      # Crear artefacto
+      # ==========================
+      - name: Upload Backend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source
+          path: |
+            src
+            package.json
+            package-lock.json
+
+      # ==========================
+      # Deploy Render
+      # ==========================
+      - name: Deploy to Render
+        id: deploy
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+
+      # ==========================
+      # Esperar despliegue
+      # ==========================
+      - name: Wait for Render Deployment
+        run: sleep 30
+
+      # ==========================
+      # Telegram éxito
+      # ==========================
+      - name: Notify Telegram Success
+        if: success()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+          -d chat_id="${{ secrets.TELEGRAM_TO }}" \
+          -d text="✅ PIPELINE COMPLETADO
+
+          📦 Proyecto: Backend Pilas
+
+          ✔ Dependencias instaladas
+          ✔ Pruebas superadas
+          ✔ SonarCloud aprobado
+          ✔ Build validado
+          ✔ Despliegue Render ejecutado
+
+          🌿 Rama: ${{ github.ref_name }}
+          👤 Usuario: ${{ github.actor }}
+
+          🟢 Estado: EXITOSO"
+
+      # ==========================
+      # Telegram error
+      # ==========================
+      - name: Notify Telegram Failure
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+          -d chat_id="${{ secrets.TELEGRAM_TO }}" \
+          -d text="❌ PIPELINE FALLIDO
+
+          📦 Proyecto: Backend Pilas
+
+          El flujo se detuvo por un error en alguna de las siguientes etapas:
+
+          • Instalación de dependencias
+          • Pruebas automatizadas
+          • SonarCloud / Quality Gate
+          • Validación del servidor
+          • Deploy Render
+
+          🌿 Rama: ${{ github.ref_name }}
+          👤 Usuario: ${{ github.actor }}
+
+          Revisa GitHub Actions para identificar la etapa exacta del fallo."
