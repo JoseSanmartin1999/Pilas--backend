@@ -8,7 +8,10 @@ const transporter = nodemailer.createTransport({
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD
-    }
+    },
+    connectionTimeout: 8000, // 8 segundos para evitar bloqueos eternos
+    greetingTimeout: 8000,
+    socketTimeout: 8000
 });
 
 export const sendPasswordResetEmail = async (toEmail, code) => {
