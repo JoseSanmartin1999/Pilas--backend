@@ -1,0 +1,25 @@
+name: Deploy Job
+
+on:
+  workflow_call:
+
+jobs:
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate server entrypoint
+        run: |
+          test -f src/server.js
+
+      - name: Deploy to Render
+        id: deploy
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+
+      - name: Wait for Render Deployment
+        run: sleep 30

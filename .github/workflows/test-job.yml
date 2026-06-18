@@ -1,0 +1,68 @@
+name: Test Job
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Tests and Generate Summary
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          npm test -- --test-reporter=spec | tee test.log
+          EXIT_CODE=$?
+          set -e
+
+          # Extraer estadísticas del resumen del reporte de pruebas de Node
+          TOTAL=$(grep -i -E "tests [0-9]+" test.log | awk '{print $NF}' || echo "0")
+          PASSED=$(grep -i -E "pass [0-9]+" test.log | awk '{print $NF}' || echo "0")
+          FAILED=$(grep -i -E "fail [0-9]+" test.log | awk '{print $NF}' || echo "0")
+          CANCELLED=$(grep -i -E "cancelled [0-9]+" test.log | awk '{print $NF}' || echo "0")
+          SKIPPED=$(grep -i -E "skipped [0-9]+" test.log | awk '{print $NF}' || echo "0")
+          DURATION=$(grep -i -E "duration_ms [0-9.]+" test.log | awk '{print $NF}' || echo "0")
+
+          TOTAL=${TOTAL:-0}
+          PASSED=${PASSED:-0}
+          FAILED=${FAILED:-0}
+          CANCELLED=${CANCELLED:-0}
+          SKIPPED=${SKIPPED:-0}
+          DURATION=${DURATION:-0}
+
+          echo "### 🧪 Reporte de Pruebas Unitarias" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Métrica | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Total de Pruebas** | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Aprobadas** | ✅ $PASSED |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Fallidas** | ❌ $FAILED |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Canceladas** | 🚫 $CANCELLED |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Omitidas** | ➖ $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Duración** | ${DURATION} ms |" >> $GITHUB_STEP_SUMMARY
+
+          exit $EXIT_CODE
+
+      - name: Upload Backend Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source
+          path: |
+            src
+            package.json
+            package-lock.json

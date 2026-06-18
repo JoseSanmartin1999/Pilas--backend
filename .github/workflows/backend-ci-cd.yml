@@ -2,174 +2,151 @@ name: Backend CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
 
 jobs:
-  backend:
-    name: Build, Test and Deploy Backend
+  notify-start:
+    name: Notify Start
     runs-on: ubuntu-latest
-
     steps:
-      # ==========================
-      # Checkout
-      # ==========================
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # ==========================
-      # Notificación inicio
-      # ==========================
       - name: Notify Telegram - Pipeline Started
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-          -d chat_id="$TELEGRAM_TO" \
-          -d text="🚀 CI/CD PIPELINE INICIADO
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_TO }}" \
+            -d parse_mode="HTML" \
+            --data-urlencode "text=🚀 <b>CI/CD PIPELINE INICIADO</b>
 
-          📦 Proyecto: Backend Pilas
-          🌿 Rama: ${{ github.ref_name }}
-          👤 Usuario: ${{ github.actor }}
+📦 <b>Proyecto:</b> Backend Pilas
+🌿 <b>Rama:</b> ${{ github.ref_name }}
+👤 <b>Usuario:</b> ${{ github.actor }}
 
-          Se ejecutarán:
-          ✅ Instalación
-          ✅ Pruebas
-          ✅ SonarCloud
-          ✅ Build Validation
-          ✅ Deploy Render"
+Se ejecutarán las siguientes fases:
+🌿 • <b>Validación de Flujo de Ramas (PRs)</b>
+🧪 • <b>Pruebas Unitarias y Cobertura</b>
+🔍 • <b>Análisis de Calidad (SonarCloud)</b>
+🚀 • <b>Despliegue a Producción (Render)</b>"
 
-      # ==========================
-      # Node.js
-      # ==========================
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      # ==========================
-      # Instalar dependencias
-      # ==========================
-      - name: Install dependencies
-        run: npm ci
-
-      # ==========================
-      # Ejecutar pruebas
-      # ==========================
-      - name: Run Tests
-        run: npm test
-
-      # ==========================
-      # SonarCloud Scan
-      # ==========================
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703
-        continue-on-error: true
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.projectKey=JoseSanmartin1999_Pilas--backend
-            -Dsonar.organization=josesanmartin1999
-            -Dsonar.sources=src
-            -Dsonar.host.url=https://sonarcloud.io
-
-      # ==========================
-      # Quality Gate
-      # ==========================
-      - name: SonarCloud Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b
-        continue-on-error: true
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      # ==========================
-      # Validación servidor
-      # ==========================
-      - name: Validate server entrypoint
+  validate-branch:
+    name: Validate Branch Flow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR Merge Rules
+        if: github.event_name == 'pull_request'
+        shell: bash
         run: |
-          test -f src/server.js
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          TARGET_BRANCH="${{ github.base_ref }}"
+          
+          echo "Validando flujo de trabajo: de '$SOURCE_BRANCH' hacia '$TARGET_BRANCH'"
+          
+          if [ "$TARGET_BRANCH" = "main" ]; then
+            if [ "$SOURCE_BRANCH" != "develop" ] && [[ ! "$SOURCE_BRANCH" =~ ^hotfix/ ]]; then
+              echo "::error::Las ramas que se fusionan en 'main' deben ser únicamente 'develop' o comenzar con 'hotfix/'."
+              exit 1
+            fi
+          elif [ "$TARGET_BRANCH" = "develop" ]; then
+            if [[ ! "$SOURCE_BRANCH" =~ ^(feature|bugfix|hotfix)/ ]]; then
+              echo "::error::Las ramas que se fusionan en 'develop' deben comenzar con 'feature/', 'bugfix/' o 'hotfix/'."
+              exit 1
+            fi
+          fi
+          echo "✅ Flujo de rama válido."
 
-      # ==========================
-      # Crear artefacto
-      # ==========================
-      - name: Upload Backend Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-source
-          path: |
-            src
-            package.json
-            package-lock.json
+  test:
+    name: Test Phase
+    needs: validate-branch
+    uses: ./.github/workflows/test-job.yml
 
-      # ==========================
-      # Deploy Render
-      # ==========================
-      - name: Deploy to Render
-        id: deploy
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+  sonar:
+    name: SonarCloud Phase
+    needs: [validate-branch, test]
+    uses: ./.github/workflows/sonar-job.yml
+    secrets: inherit
+
+  deploy:
+    name: Deploy Phase
+    needs: [validate-branch, test, sonar]
+    # Solo se despliega a producción en push directo o merge aprobado en 'main'
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    uses: ./.github/workflows/deploy-job.yml
+    secrets: inherit
+
+  notify-end:
+    name: Notify End
+    needs: [validate-branch, test, sonar, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send Telegram Notification
+        shell: bash
         run: |
-          curl -s -X POST "$RENDER_DEPLOY_HOOK"
+          # Función para formatear el estado de cada fase en español
+          get_status_info() {
+            case "$1" in
+              success)
+                echo "✅ Exitoso"
+                ;;
+              failure)
+                echo "❌ Fallido"
+                ;;
+              cancelled)
+                echo "🚫 Cancelado"
+                ;;
+              skipped)
+                echo "➖ Omitido"
+                ;;
+              *)
+                echo "❓ Desconocido"
+                ;;
+            esac
+          }
 
-      # ==========================
-      # Esperar despliegue
-      # ==========================
-      - name: Wait for Render Deployment
-        run: sleep 30
+          # Obtener estado de cada job
+          VALIDATE_STATUS=$(get_status_info "${{ needs.validate-branch.result }}")
+          TEST_STATUS=$(get_status_info "${{ needs.test.result }}")
+          SONAR_STATUS=$(get_status_info "${{ needs.sonar.result }}")
+          DEPLOY_STATUS=$(get_status_info "${{ needs.deploy.result }}")
 
-      # ==========================
-      # Telegram éxito
-      # ==========================
-      - name: Notify Telegram Success
-        if: success()
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-          -d chat_id="$TELEGRAM_TO" \
-          -d text="✅ PIPELINE COMPLETADO
+          # Determinar el estado general y el emoji correspondiente
+          if [ "${{ needs.validate-branch.result }}" = "failure" ] || \
+             [ "${{ needs.test.result }}" = "failure" ] || \
+             [ "${{ needs.sonar.result }}" = "failure" ] || \
+             [ "${{ needs.deploy.result }}" = "failure" ]; then
+            OVERALL_EMOJI="❌"
+            OVERALL_TEXT="PIPELINE FALLIDO O INCOMPLETO"
+            OVERALL_STATUS="🔴 FALLIDO"
+          else
+            OVERALL_EMOJI="✅"
+            OVERALL_TEXT="PIPELINE COMPLETADO CON ÉXITO"
+            OVERALL_STATUS="🟢 EXITOSO"
+          fi
 
-          📦 Proyecto: Backend Pilas
+          # Construir el mensaje con formato HTML para Telegram
+          MESSAGE="<b>$OVERALL_EMOJI $OVERALL_TEXT</b>
 
-          ✔ Dependencias instaladas
-          ✔ Pruebas superadas
-          ✔ SonarCloud aprobado
-          ✔ Build validado
-          ✔ Despliegue Render ejecutado
+📦 <b>Proyecto:</b> Backend Pilas
+🌿 <b>Rama:</b> ${{ github.ref_name }}
+👤 <b>Usuario:</b> ${{ github.actor }}
+🟢 <b>Estado General:</b> $OVERALL_STATUS
 
-          🌿 Rama: ${{ github.ref_name }}
-          👤 Usuario: ${{ github.actor }}
+📊 <b>Resumen por Fases:</b>
+🌿 • <b>Validación de Ramas:</b> $VALIDATE_STATUS
+🧪 • <b>Pruebas Unitarias:</b> $TEST_STATUS
+🔍 • <b>SonarCloud / Quality Gate:</b> $SONAR_STATUS
+🚀 • <b>Despliegue Render:</b> $DEPLOY_STATUS
 
-          🟢 Estado: EXITOSO"
+🔗 <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Ver detalles en GitHub Actions</a>"
 
-      # ==========================
-      # Telegram error / cancelado
-      # ==========================
-      - name: Notify Telegram Failure
-        if: failure() || cancelled()
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
-          -d chat_id="$TELEGRAM_TO" \
-          -d text="❌ PIPELINE DETENIDO o FALLIDO
-
-          📦 Proyecto: Backend Pilas
-
-          El flujo no se completó debido a un error o fue cancelado.
-
-          🔴 Estado del Job: ${{ job.status }}
-          🌿 Rama: ${{ github.ref_name }}
-          👤 Usuario: ${{ github.actor }}
-
-          Revisa GitHub Actions para identificar la etapa exacta y ver los detalles."
+          # Enviar mensaje a Telegram
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_TO }}" \
+            -d parse_mode="HTML" \
+            --data-urlencode "text=$MESSAGE"
