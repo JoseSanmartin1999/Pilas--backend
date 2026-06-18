@@ -200,7 +200,12 @@ export const forgotPassword = async (req, res) => {
 
         await db.query('UPDATE Users SET reset_code = ?, reset_code_expires_at = ? WHERE id = ?', [code, expiresAt, user.id]);
 
-        await sendPasswordResetEmail(email, code);
+        try {
+            await sendPasswordResetEmail(email, code);
+        } catch (mailErr) {
+            console.error("Error al enviar correo de recuperación:", mailErr);
+            return res.status(500).json({ message: "No se pudo enviar el correo de recuperación. Por favor, verifica tu conexión o inténtalo más tarde." });
+        }
 
         res.json({ message: "Código de recuperación enviado al correo." });
     } catch (error) {
@@ -306,7 +311,12 @@ export const resendVerificationCode = async (req, res) => {
             [code, expiresAt, user.id]
         );
 
-        await sendEmailVerificationEmail(email, code);
+        try {
+            await sendEmailVerificationEmail(email, code);
+        } catch (mailErr) {
+            console.error("Error al enviar correo de verificación:", mailErr);
+            return res.status(500).json({ message: "No se pudo enviar el correo de verificación. Por favor, verifica tu conexión o inténtalo más tarde." });
+        }
 
         res.json({ message: "Nuevo código de verificación enviado al correo." });
     } catch (error) {
