@@ -48,18 +48,38 @@ export const register = async (req, res) => {
         // 2. Insertar Usuario en TiDB con los nuevos campos y status = 'PENDIENTE'
         const [userResult] = await connection.query(
             `INSERT INTO Users (
-                full_name, email, password_hash, role, 
-                institution, career, student_id, current_semester, 
-                bio, profile_photo_url, status, verification_code, verification_code_expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE', ?, ?)`,
+                email, password_hash, status, verification_code, verification_code_expires_at
+            ) VALUES (?, ?, 'PENDIENTE', ?, ?)`,
             [
-                full_name, email, password_hash, role,
-                institution, career, student_id, current_semester,
-                bio, profile_photo_url, verificationCode, verificationExpires
+                email, password_hash, verificationCode, verificationExpires
             ]
         );
 
         const userId = userResult.insertId;
+
+        // 2b. Insertar Rol del Usuario
+        const roleMap = {
+            'ADMIN': 1,
+            'MENTOR': 2,
+            'APRENDIZ': 3
+        };
+        const roleId = roleMap[role] || 3;
+        await connection.query(
+            `INSERT INTO User_Roles (user_id, role_id) VALUES (?, ?)`,
+            [userId, roleId]
+        );
+
+        // 2c. Insertar Perfil del Usuario
+        await connection.query(
+            `INSERT INTO Profiles (
+                user_id, full_name, profile_photo_url, bio, 
+                institution, career, student_id, current_semester
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                userId, full_name, profile_photo_url, bio,
+                institution || 'ESPE', career || null, student_id || null, current_semester || 1
+            ]
+        );
 
         // 3. Si es Mentor, registrar las materias de la malla seleccionadas
         if (role === 'MENTOR' && selectedSubjects && selectedSubjects.length > 0) {
@@ -109,7 +129,13 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
     const { email, password } = req.body;
     try {
-        const [users] = await db.query('SELECT * FROM Users WHERE email = ?', [email]);
+        const [users] = await db.query(`
+            SELECT u.*, p.full_name, p.profile_photo_url, p.bio, p.institution, p.career, p.student_id, p.current_semester, p.xp, p.level, p.espe_coins,
+                   (SELECT r.name FROM Roles r JOIN User_Roles ur ON r.id = ur.role_id WHERE ur.user_id = u.id LIMIT 1) AS role
+            FROM Users u
+            LEFT JOIN Profiles p ON u.id = p.user_id
+            WHERE u.email = ?
+        `, [email]);
         if (users.length === 0) {
             return res.status(401).json({ message: "Credenciales incorrectas" });
         }

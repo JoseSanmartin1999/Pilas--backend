@@ -13,7 +13,7 @@ export const redeemCoupon = async (req, res) => {
 
     try {
         // 1. Obtener balance actual del usuario
-        const [rows] = await db.query("SELECT espe_coins FROM Users WHERE id = ?", [userId]);
+        const [rows] = await db.query("SELECT espe_coins FROM Profiles WHERE user_id = ?", [userId]);
         if (rows.length === 0) {
             return res.status(404).json({ error: "Usuario no encontrado." });
         }
@@ -27,7 +27,7 @@ export const redeemCoupon = async (req, res) => {
 
         // 3. Descontar monedas
         const newCoins = currentCoins - cost;
-        await db.query("UPDATE Users SET espe_coins = ? WHERE id = ?", [newCoins, userId]);
+        await db.query("UPDATE Profiles SET espe_coins = ? WHERE user_id = ?", [newCoins, userId]);
 
         // 4. Generar código aleatorio único del cupón
         const couponCode = 'ESPE-COIN-' + Math.random().toString(36).substring(2, 8).toUpperCase();

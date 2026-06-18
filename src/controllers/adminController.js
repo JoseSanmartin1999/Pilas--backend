@@ -5,9 +5,13 @@ import { uploadToImageKit } from '../config/imagekit.js';
 export const getStats = async (req, res) => {
     try {
         // Conteo de usuarios por rol
-        const [userRoles] = await db.query(
-            "SELECT role, COUNT(*) as count FROM Users GROUP BY role"
-        );
+        const [userRoles] = await db.query(`
+            SELECT r.name as role, COUNT(*) as count 
+            FROM Users u
+            JOIN User_Roles ur ON u.id = ur.user_id
+            JOIN Roles r ON ur.role_id = r.id
+            GROUP BY r.name
+        `);
 
         // Conteo de tutorías por estado
         const [mentorshipStatuses] = await db.query(
@@ -66,9 +70,12 @@ export const getStats = async (req, res) => {
 export const getUsers = async (req, res) => {
     try {
         const query = `
-            SELECT id, full_name, email, role, current_semester, career, institution, student_id, status, created_at 
-            FROM Users 
-            ORDER BY created_at DESC
+            SELECT u.id, p.full_name, u.email, 
+                   (SELECT r.name FROM Roles r JOIN User_Roles ur ON r.id = ur.role_id WHERE ur.user_id = u.id LIMIT 1) AS role,
+                   p.current_semester, p.career, p.institution, p.student_id, u.status, u.created_at 
+            FROM Users u
+            LEFT JOIN Profiles p ON u.id = p.user_id
+            ORDER BY u.created_at DESC
         `;
         const [users] = await db.query(query);
         res.json(users);
@@ -110,10 +117,11 @@ export const deleteUser = async (req, res) => {
 export const getApplications = async (req, res) => {
     try {
         const query = `
-            SELECT ta.id, ta.user_id, u.full_name as applicant_name, u.email as applicant_email, 
-                   u.current_semester, u.career, ta.motivation, ta.selected_subjects, ta.status, ta.created_at
+            SELECT ta.id, ta.user_id, p.full_name as applicant_name, u.email as applicant_email, 
+                   p.current_semester, p.career, ta.motivation, ta.selected_subjects, ta.status, ta.created_at
             FROM Tutor_Applications ta
             JOIN Users u ON ta.user_id = u.id
+            LEFT JOIN Profiles p ON u.id = p.user_id
             ORDER BY ta.created_at DESC
         `;
         const [apps] = await db.query(query);
@@ -203,8 +211,10 @@ export const approveApplication = async (req, res) => {
         }
 
         // 2. Ascender el usuario a MENTOR y guardar bio
+        await connection.query("DELETE FROM User_Roles WHERE user_id = ?", [app.user_id]);
+        await connection.query("INSERT INTO User_Roles (user_id, role_id) VALUES (?, 2)", [app.user_id]);
         await connection.query(
-            "UPDATE Users SET role = 'MENTOR', bio = ? WHERE id = ?",
+            "UPDATE Profiles SET bio = ? WHERE user_id = ?",
             [app.motivation, app.user_id]
         );
 
@@ -254,10 +264,12 @@ export const rejectApplication = async (req, res) => {
 export const getTickets = async (req, res) => {
     try {
         const query = `
-            SELECT st.id, st.user_id, u.full_name as user_name, u.email as user_email, u.role as user_role,
+            SELECT st.id, st.user_id, p.full_name as user_name, u.email as user_email,
+                   (SELECT r.name FROM Roles r JOIN User_Roles ur ON r.id = ur.role_id WHERE ur.user_id = u.id LIMIT 1) as user_role,
                    st.title, st.description, st.status, st.reply, st.created_at
             FROM Support_Tickets st
             JOIN Users u ON st.user_id = u.id
+            LEFT JOIN Profiles p ON u.id = p.user_id
             ORDER BY st.created_at DESC
         `;
         const [tickets] = await db.query(query);
