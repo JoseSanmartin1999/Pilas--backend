@@ -233,7 +233,7 @@ export const getAllMentors = async (req, res) => {
             queryParams.push(exclude);
         }
 
-        query += ` GROUP BY u.id`;
+        query += ` GROUP BY u.id, p.user_id`;
 
         const [mentors] = await db.query(query, queryParams);
 
