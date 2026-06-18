@@ -50,12 +50,14 @@ export const getMentorshipsByUser = async (req, res) => {
                 m.apprentice_notified,
                 m.estimated_duration,
                 m.closed_at,
-                mentor.full_name as mentor_name,
-                apprentice.full_name as apprentice_name,
+                p_mentor.full_name as mentor_name,
+                p_apprentice.full_name as apprentice_name,
                 s.name as subject_name
             FROM Mentorships m
             JOIN Users mentor ON m.mentor_id = mentor.id
+            LEFT JOIN Profiles p_mentor ON mentor.id = p_mentor.user_id
             JOIN Users apprentice ON m.apprentice_id = apprentice.id
+            LEFT JOIN Profiles p_apprentice ON apprentice.id = p_apprentice.user_id
             JOIN Subjects s ON m.subject_id = s.id
             WHERE (m.mentor_id = ? OR m.apprentice_id = ?) AND m.is_deleted = 0
               AND (m.status != 'COMPLETADA' OR m.closed_at >= NOW() - INTERVAL 2 DAY)
@@ -88,12 +90,14 @@ export const updateMentorship = async (req, res) => {
         // Primero obtenemos el estado actual para la lógica de contador y notificaciones
         const [current] = await db.query(`
             SELECT m.reprogramming_count, m.status, 
-                   a.email as apprentice_email, a.full_name as apprentice_name, 
-                   mt.email as mentor_email, mt.full_name as mentor_name, 
+                   a.email as apprentice_email, p_a.full_name as apprentice_name, 
+                   mt.email as mentor_email, p_mt.full_name as mentor_name, 
                    s.name as subject_name
             FROM Mentorships m
             JOIN Users a ON m.apprentice_id = a.id
+            LEFT JOIN Profiles p_a ON a.id = p_a.user_id
             JOIN Users mt ON m.mentor_id = mt.id
+            LEFT JOIN Profiles p_mt ON mt.id = p_mt.user_id
             JOIN Subjects s ON m.subject_id = s.id
             WHERE m.id = ?
         `, [id]);

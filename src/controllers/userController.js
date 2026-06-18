@@ -47,13 +47,13 @@ export const updateUserProfile = async (req, res) => {
         if (req.file) {
             fotoUrl = req.file.path;
         } else if (fotoUrl === undefined || fotoUrl === null) {
-            const [currentUserRows] = await db.query('SELECT profile_photo_url FROM Users WHERE id = ?', [id]);
+            const [currentUserRows] = await db.query('SELECT profile_photo_url FROM Profiles WHERE user_id = ?', [id]);
             if (currentUserRows.length > 0) {
                 fotoUrl = currentUserRows[0].profile_photo_url;
             }
         }
 
-        const query = 'UPDATE Users SET bio = ?, current_semester = ?, profile_photo_url = ? WHERE id = ?';
+        const query = 'UPDATE Profiles SET bio = ?, current_semester = ?, profile_photo_url = ? WHERE user_id = ?';
         await db.query(query, [bio, current_semester, fotoUrl, id]);
 
         // Actualizar Mentor_Subjects
@@ -97,7 +97,14 @@ export const updateUserProfile = async (req, res) => {
 // --- Funciones Auxiliares ---
 
 const findUserById = async (userId) => {
-    const [users] = await db.query('SELECT * FROM Users WHERE id = ?', [userId]);
+    const [users] = await db.query(`
+        SELECT u.id, u.email, u.status, u.created_at,
+               p.full_name, p.profile_photo_url, p.bio, p.institution, p.career, p.student_id, p.current_semester, p.xp, p.level, p.espe_coins,
+               (SELECT r.name FROM Roles r JOIN User_Roles ur ON r.id = ur.role_id WHERE ur.user_id = u.id LIMIT 1) AS role
+        FROM Users u
+        LEFT JOIN Profiles p ON u.id = p.user_id
+        WHERE u.id = ?
+    `, [userId]);
     if (users.length === 0) return null;
     const user = users[0];
 
@@ -163,9 +170,10 @@ const enrichUserProfileData = async (user) => {
 
         // Obtener comentarios de estudiantes
         const [commentRows] = await db.query(
-            `SELECT m.rating, m.rating_comment, m.closed_at, u.full_name as apprentice_name 
+            `SELECT m.rating, m.rating_comment, m.closed_at, p.full_name as apprentice_name 
              FROM Mentorships m
              JOIN Users u ON m.apprentice_id = u.id
+             LEFT JOIN Profiles p ON u.id = p.user_id
              WHERE m.mentor_id = ? AND m.status = 'COMPLETADA' AND m.is_rated = 1 AND m.rating_comment IS NOT NULL AND m.rating_comment != '' AND m.is_deleted = 0
              ORDER BY m.closed_at DESC
              LIMIT 5`,
@@ -207,13 +215,16 @@ export const getAllMentors = async (req, res) => {
     try {
         const { exclude } = req.query;
         let query = `
-            SELECT u.id, u.full_name AS nombre, '' AS apellidos, u.career, u.profile_photo_url, u.current_semester,
+            SELECT u.id, p.full_name AS nombre, '' AS apellidos, p.career, p.profile_photo_url, p.current_semester,
             GROUP_CONCAT(s.name SEPARATOR ', ') AS materias_nombres,
             (SELECT COALESCE(AVG(m.rating), 5.0) FROM Mentorships m WHERE m.mentor_id = u.id AND m.status = 'COMPLETADA' AND m.is_rated = 1 AND m.is_deleted = 0) AS score
             FROM Users u
+            JOIN Profiles p ON u.id = p.user_id
+            JOIN User_Roles ur ON u.id = ur.user_id
+            JOIN Roles r ON ur.role_id = r.id
             LEFT JOIN Mentor_Subjects ms ON u.id = ms.mentor_id
             LEFT JOIN Subjects s ON ms.subject_id = s.id
-            WHERE u.role = 'MENTOR'
+            WHERE r.name = 'MENTOR'
         `;
         const queryParams = [];
 
@@ -245,8 +256,9 @@ export const upgradeToMentor = async (req, res) => {
 
     try {
         // 1. Cambiar el rol del usuario a MENTOR y actualizar bio
-        const upgradeQuery = "UPDATE Users SET role = 'MENTOR', bio = ? WHERE id = ?";
-        await db.query(upgradeQuery, [bio || '', id]);
+        await db.query("DELETE FROM User_Roles WHERE user_id = ?", [id]);
+        await db.query("INSERT INTO User_Roles (user_id, role_id) VALUES (?, 2)", [id]);
+        await db.query("UPDATE Profiles SET bio = ? WHERE user_id = ?", [bio || '', id]);
 
         // 2. Asociar las materias seleccionadas en Mentor_Subjects
         if (materias && materias.length > 0) {
