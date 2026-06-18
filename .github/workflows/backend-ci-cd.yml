@@ -142,26 +142,21 @@ jobs:
           🟢 Estado: EXITOSO"
 
       # ==========================
-      # Telegram error
+      # Telegram error / cancelado
       # ==========================
       - name: Notify Telegram Failure
-        if: failure()
+        if: failure() || cancelled()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
           -d chat_id="${{ secrets.TELEGRAM_TO }}" \
-          -d text="❌ PIPELINE FALLIDO
+          -d text="❌ PIPELINE DETENIDO o FALLIDO
 
           📦 Proyecto: Backend Pilas
 
-          El flujo se detuvo por un error en alguna de las siguientes etapas:
+          El flujo no se completó debido a un error o fue cancelado.
 
-          • Instalación de dependencias
-          • Pruebas automatizadas
-          • SonarCloud / Quality Gate
-          • Validación del servidor
-          • Deploy Render
-
+          🔴 Estado del Job: ${{ job.status }}
           🌿 Rama: ${{ github.ref_name }}
           👤 Usuario: ${{ github.actor }}
 
-          Revisa GitHub Actions para identificar la etapa exacta del fallo."
+          Revisa GitHub Actions para identificar la etapa exacta y ver los detalles."
