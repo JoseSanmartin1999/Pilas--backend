@@ -17,19 +17,19 @@ jobs:
           fetch-depth: 0 # Desactivar clonación superficial (shallow clone) para análisis de SonarCloud
 
       - name: SonarCloud Scan
-        uses: sonarsource/sonarqube-scan-action@v6
+        uses: sonarsource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
-            -Dsonar.projectKey=JoseSanmartin1999_Pilas--backend
-            -Dsonar.organization=josesanmartin1999
-            -Dsonar.sources=src
-            -Dsonar.host.url=https://sonarcloud.io
-            -Dsonar.verbose=true
+            "-Dsonar.projectKey=josesanmartin1999_Pilas--backend"
+            "-Dsonar.organization=josesanmartin1999"
+            "-Dsonar.sources=src"
+            "-Dsonar.host.url=https://sonarcloud.io"
+            "-Dsonar.verbose=true"
 
       - name: SonarCloud Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
+        uses: sonarsource/sonarqube-quality-gate-action@v2
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
