@@ -9,6 +9,10 @@ export const createMentorship = async (req, res) => {
         return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
+    if (String(mentor_id) === String(apprentice_id)) {
+        return res.status(400).json({ error: "No puedes solicitar una tutoría contigo mismo" });
+    }
+
     try {
         const query = `
             INSERT INTO Mentorships (mentor_id, apprentice_id, subject_id, scheduled_date, objectives, status, modality, meeting_place, platform, estimated_duration)
