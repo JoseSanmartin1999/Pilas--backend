@@ -30,7 +30,8 @@ const MIGRATIONS = [
     { query: 'ALTER TABLE Badges ADD COLUMN xp_reward INT DEFAULT 0;', column: 'xp_reward' },
     { query: 'ALTER TABLE Badges ADD COLUMN coins_reward INT DEFAULT 0;', column: 'coins_reward' },
     { query: 'ALTER TABLE Tutor_Applications ADD COLUMN academic_record_url VARCHAR(500) DEFAULT NULL;', column: 'academic_record_url' },
-    { query: 'ALTER TABLE Mentorships ADD COLUMN reminder_2h_sent TINYINT(1) DEFAULT 0;', column: 'reminder_2h_sent' }
+    { query: 'ALTER TABLE Mentorships ADD COLUMN reminder_2h_sent TINYINT(1) DEFAULT 0;', column: 'reminder_2h_sent' },
+    { query: 'ALTER TABLE Mentorships ADD COLUMN reminder_10m_sent TINYINT(1) DEFAULT 0;', column: 'reminder_10m_sent' }
 ];
 
 async function executeMigrations() {

@@ -89,6 +89,9 @@ export async function checkAndSendReminders() {
 
     // Recordatorio de 2 horas (nuevo)
     await sendRemindersForWindow('2 horas', '2 HOUR', 'reminder_2h_sent');
+
+    // Recordatorio de 10 minutos (nuevo)
+    await sendRemindersForWindow('10 minutos', '10 MINUTE', 'reminder_10m_sent');
 }
 
 export function initReminderScheduler() {
@@ -98,5 +101,5 @@ export function initReminderScheduler() {
     // Ejecutar cada 1 minuto (60 * 1000 ms)
     const intervalMs = 60 * 1000;
     setInterval(checkAndSendReminders, intervalMs);
-    console.log("⏰ Planificador de recordatorios inicializado (corriendo cada 15 minutos). Recordatorios: 24h y 2h.");
+    console.log("⏰ Planificador de recordatorios inicializado (corriendo cada 1 minuto). Recordatorios: 24h, 2h y 10m.");
 }
