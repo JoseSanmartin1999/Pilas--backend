@@ -3,7 +3,7 @@ import { sendMentorshipReminderEmail } from './emailService.js';
 
 export async function checkAndSendReminders() {
     try {
-        console.log("⏰ Buscando tutorías próximas (siguientes 24 horas) para enviar recordatorios...");
+        console.log("⏰ Buscando tutorías próximas (siguientes 10 minutos) para enviar recordatorios...");
         const query = `
             SELECT m.id, m.scheduled_date, m.modality, m.meeting_place, m.platform, m.meeting_link,
                    s.name as subject_name,
@@ -18,7 +18,7 @@ export async function checkAndSendReminders() {
             WHERE m.status = 'ACEPTADA'
               AND m.reminder_sent = 0
               AND m.is_deleted = 0
-              AND m.scheduled_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 24 HOUR)
+              AND m.scheduled_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 10 MINUTE)
         `;
         const [mentorships] = await db.query(query);
         
@@ -81,8 +81,8 @@ export function initReminderScheduler() {
     // Ejecutar una vez al arrancar el servidor
     checkAndSendReminders();
 
-    // Ejecutar cada 15 minutos (15 * 60 * 1000 ms)
-    const intervalMs = 15 * 60 * 1000;
+    // Ejecutar cada 1 minuto (60 * 1000 ms)
+    const intervalMs = 60 * 1000;
     setInterval(checkAndSendReminders, intervalMs);
-    console.log("⏰ Planificador de recordatorios inicializado (corriendo cada 15 minutos).");
+    console.log("⏰ Planificador de recordatorios inicializado (corriendo cada 1 minuto).");
 }
