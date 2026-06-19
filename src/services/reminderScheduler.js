@@ -27,7 +27,7 @@ async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
               AND m.scheduled_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ${intervalSQL})
         `;
         const [mentorships] = await db.query(query);
-        
+
         if (mentorships.length === 0) {
             console.log(`⏰ No se encontraron tutorías próximas (${intervalLabel}) que requieran recordatorio.`);
             return;
@@ -37,19 +37,19 @@ async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
 
         for (const m of mentorships) {
             console.log(`⏰ Enviando recordatorio (${intervalLabel}) para la tutoría ID ${m.id} (${m.subject_name})...`);
-            
+
             // Enviar correo al aprendiz
             try {
                 await sendMentorshipReminderEmail(
-                    m.apprentice_email, 
-                    m.apprentice_name || 'Estudiante', 
-                    m.mentor_name || 'Tutor', 
-                    'MENTOR', 
-                    m.subject_name, 
-                    m.scheduled_date, 
-                    m.modality, 
-                    m.meeting_place, 
-                    m.platform, 
+                    m.apprentice_email,
+                    m.apprentice_name || 'Estudiante',
+                    m.mentor_name || 'Tutor',
+                    'MENTOR',
+                    m.subject_name,
+                    m.scheduled_date,
+                    m.modality,
+                    m.meeting_place,
+                    m.platform,
                     m.meeting_link
                 );
             } catch (err) {
@@ -59,15 +59,15 @@ async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
             // Enviar correo al mentor
             try {
                 await sendMentorshipReminderEmail(
-                    m.mentor_email, 
-                    m.mentor_name || 'Tutor', 
-                    m.apprentice_name || 'Aprendiz', 
-                    'APRENDIZ', 
-                    m.subject_name, 
-                    m.scheduled_date, 
-                    m.modality, 
-                    m.meeting_place, 
-                    m.platform, 
+                    m.mentor_email,
+                    m.mentor_name || 'Tutor',
+                    m.apprentice_name || 'Aprendiz',
+                    'APRENDIZ',
+                    m.subject_name,
+                    m.scheduled_date,
+                    m.modality,
+                    m.meeting_place,
+                    m.platform,
                     m.meeting_link
                 );
             } catch (err) {
@@ -86,7 +86,7 @@ async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
 export async function checkAndSendReminders() {
     // Recordatorio de 24 horas (existente)
     await sendRemindersForWindow('24 horas', '24 HOUR', 'reminder_sent');
-    
+
     // Recordatorio de 2 horas (nuevo)
     await sendRemindersForWindow('2 horas', '2 HOUR', 'reminder_2h_sent');
 }
@@ -95,8 +95,8 @@ export function initReminderScheduler() {
     // Ejecutar una vez al arrancar el servidor
     checkAndSendReminders();
 
-    // Ejecutar cada 15 minutos (15 * 60 * 1000 ms)
-    const intervalMs = 15 * 60 * 1000;
+    // Ejecutar cada 1 minuto (60 * 1000 ms)
+    const intervalMs = 60 * 1000;
     setInterval(checkAndSendReminders, intervalMs);
     console.log("⏰ Planificador de recordatorios inicializado (corriendo cada 15 minutos). Recordatorios: 24h y 2h.");
 }
