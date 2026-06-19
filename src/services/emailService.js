@@ -154,7 +154,8 @@ export const sendMentorshipReprogramEmail = async (toEmail, recipientName, sende
         month: 'long',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        timeZone: 'America/Guayaquil'
     });
 
     const roleText = initiatorRole === 'MENTOR' ? 'el tutor' : 'el aprendiz';
@@ -188,7 +189,8 @@ export const sendMentorshipReminderEmail = async (toEmail, recipientName, partne
         month: 'long',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        timeZone: 'America/Guayaquil'
     });
 
     let locationInfo = '';
