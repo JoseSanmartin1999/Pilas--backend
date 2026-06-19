@@ -1,9 +1,15 @@
 import db from '../config/db.js';
 import { sendMentorshipReminderEmail } from './emailService.js';
 
-export async function checkAndSendReminders() {
+/**
+ * Envía recordatorios para tutorías dentro de la ventana de tiempo especificada.
+ * @param {string} intervalLabel - Etiqueta descriptiva (ej. "24 horas", "2 horas")
+ * @param {string} intervalSQL - Intervalo SQL (ej. "24 HOUR", "2 HOUR")
+ * @param {string} flagColumn - Columna de la DB que indica si ya se envió (ej. "reminder_sent", "reminder_2h_sent")
+ */
+async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
     try {
-        console.log("⏰ Buscando tutorías próximas (siguientes 24 horas) para enviar recordatorios...");
+        console.log(`⏰ Buscando tutorías próximas (siguientes ${intervalLabel}) para enviar recordatorios (${flagColumn})...`);
         const query = `
             SELECT m.id, m.scheduled_date, m.modality, m.meeting_place, m.platform, m.meeting_link,
                    s.name as subject_name,
@@ -16,21 +22,21 @@ export async function checkAndSendReminders() {
             LEFT JOIN Profiles p_apprentice ON ap.id = p_apprentice.user_id
             JOIN Subjects s ON m.subject_id = s.id
             WHERE m.status = 'ACEPTADA'
-              AND m.reminder_sent = 0
+              AND m.${flagColumn} = 0
               AND m.is_deleted = 0
-              AND m.scheduled_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 24 HOUR)
+              AND m.scheduled_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ${intervalSQL})
         `;
         const [mentorships] = await db.query(query);
         
         if (mentorships.length === 0) {
-            console.log("⏰ No se encontraron tutorías próximas que requieran recordatorio.");
+            console.log(`⏰ No se encontraron tutorías próximas (${intervalLabel}) que requieran recordatorio.`);
             return;
         }
 
-        console.log(`⏰ Se encontraron ${mentorships.length} tutorías elegibles para recordatorio.`);
+        console.log(`⏰ Se encontraron ${mentorships.length} tutorías elegibles para recordatorio (${intervalLabel}).`);
 
         for (const m of mentorships) {
-            console.log(`⏰ Enviando recordatorio para la tutoría ID ${m.id} (${m.subject_name})...`);
+            console.log(`⏰ Enviando recordatorio (${intervalLabel}) para la tutoría ID ${m.id} (${m.subject_name})...`);
             
             // Enviar correo al aprendiz
             try {
@@ -69,12 +75,20 @@ export async function checkAndSendReminders() {
             }
 
             // Marcar recordatorio como enviado para evitar duplicados
-            await db.query('UPDATE Mentorships SET reminder_sent = 1 WHERE id = ?', [m.id]);
-            console.log(`✅ Tutoría ID ${m.id} marcada como notificada.`);
+            await db.query(`UPDATE Mentorships SET ${flagColumn} = 1 WHERE id = ?`, [m.id]);
+            console.log(`✅ Tutoría ID ${m.id} marcada como notificada (${flagColumn}).`);
         }
     } catch (error) {
-        console.error("❌ Error en la tarea de recordatorio de tutorías:", error);
+        console.error(`❌ Error en la tarea de recordatorio de tutorías (${intervalLabel}):`, error);
     }
+}
+
+export async function checkAndSendReminders() {
+    // Recordatorio de 24 horas (existente)
+    await sendRemindersForWindow('24 horas', '24 HOUR', 'reminder_sent');
+    
+    // Recordatorio de 2 horas (nuevo)
+    await sendRemindersForWindow('2 horas', '2 HOUR', 'reminder_2h_sent');
 }
 
 export function initReminderScheduler() {
@@ -84,5 +98,5 @@ export function initReminderScheduler() {
     // Ejecutar cada 15 minutos (15 * 60 * 1000 ms)
     const intervalMs = 15 * 60 * 1000;
     setInterval(checkAndSendReminders, intervalMs);
-    console.log("⏰ Planificador de recordatorios inicializado (corriendo cada 15 minutos).");
+    console.log("⏰ Planificador de recordatorios inicializado (corriendo cada 15 minutos). Recordatorios: 24h y 2h.");
 }

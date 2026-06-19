@@ -14,13 +14,15 @@ import {
     getBadges,
     createBadge,
     updateBadge,
-    deleteBadge
+    deleteBadge,
+    getReportData
 } from '../controllers/adminController.js';
 
 const router = express.Router();
 
 // Estadísticas del sistema
 router.get('/stats', getStats);
+router.get('/report', getReportData);
 
 // Gestión de usuarios
 router.get('/users', getUsers);
@@ -28,8 +30,21 @@ router.put('/users/:id/status', updateUserStatus);
 router.delete('/users/:id', deleteUser);
 
 // Solicitudes a tutores
+// Multer con memoryStorage para subir reporte académico (PDF, max 10MB)
+const applicationUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error('Solo se permiten archivos PDF.'), false);
+        }
+    }
+});
+
 router.get('/tutors/applications', getApplications);
-router.post('/tutors/applications', createApplication);
+router.post('/tutors/applications', applicationUpload.single('academic_record'), createApplication);
 router.put('/tutors/applications/:id/approve', approveApplication);
 router.put('/tutors/applications/:id/reject', rejectApplication);
 

@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS Tutor_Applications (
     user_id             INT NOT NULL,
     motivation          TEXT NOT NULL,
     selected_subjects   JSON NOT NULL,
+    academic_record_url VARCHAR(500) DEFAULT NULL,
     status              VARCHAR(20) DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

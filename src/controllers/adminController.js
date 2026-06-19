@@ -1,5 +1,6 @@
 import db from '../config/db.js';
 import { uploadToImageKit } from '../config/imagekit.js';
+import { uploadToCloudinary } from '../config/cloudinaryRepository.js';
 
 // 1. Estadísticas de la página
 export const getStats = async (req, res) => {
@@ -118,7 +119,7 @@ export const getApplications = async (req, res) => {
     try {
         const query = `
             SELECT ta.id, ta.user_id, p.full_name as applicant_name, u.email as applicant_email, 
-                   p.current_semester, p.career, ta.motivation, ta.selected_subjects, ta.status, ta.created_at
+                   p.current_semester, p.career, ta.motivation, ta.selected_subjects, ta.academic_record_url, ta.status, ta.created_at
             FROM Tutor_Applications ta
             JOIN Users u ON ta.user_id = u.id
             LEFT JOIN Profiles p ON u.id = p.user_id
@@ -152,13 +153,37 @@ export const getApplications = async (req, res) => {
 };
 
 export const createApplication = async (req, res) => {
-    const { user_id, motivation, selected_subjects } = req.body;
+    let { user_id, motivation, selected_subjects } = req.body;
+
+    // Parsear selected_subjects si viene como string (multipart/form-data)
+    if (typeof selected_subjects === 'string') {
+        try {
+            selected_subjects = JSON.parse(selected_subjects);
+        } catch (e) {
+            selected_subjects = [selected_subjects];
+        }
+    }
 
     if (!user_id || !motivation || !selected_subjects || selected_subjects.length === 0) {
         return res.status(400).json({ error: "Todos los campos (motivación, materias) son requeridos." });
     }
 
     try {
+        // Validar semestre >= 4
+        const [profileRows] = await db.query(
+            "SELECT current_semester FROM Profiles WHERE user_id = ?",
+            [user_id]
+        );
+        const semester = profileRows.length > 0 ? profileRows[0].current_semester : 1;
+        if (semester < 4) {
+            return res.status(400).json({ error: "Solo los estudiantes de 4to semestre en adelante pueden postularse como mentores." });
+        }
+
+        // Validar archivo PDF obligatorio
+        if (!req.file) {
+            return res.status(400).json({ error: "Debes subir tu reporte académico (archivo PDF) para postularte como mentor." });
+        }
+
         // Verificar si ya tiene una postulación pendiente
         const [existing] = await db.query(
             "SELECT * FROM Tutor_Applications WHERE user_id = ? AND status = 'PENDING'",
@@ -169,8 +194,18 @@ export const createApplication = async (req, res) => {
             return res.status(400).json({ error: "Ya tienes una solicitud de ascenso pendiente de aprobación por el administrador." });
         }
 
-        const query = "INSERT INTO Tutor_Applications (user_id, motivation, selected_subjects, status) VALUES (?, ?, ?, 'PENDING')";
-        await db.query(query, [user_id, motivation, JSON.stringify(selected_subjects)]);
+        // Subir PDF a Cloudinary
+        let academicRecordUrl = null;
+        try {
+            const result = await uploadToCloudinary(req.file.buffer, req.file.originalname, `tutor_apps_${user_id}`);
+            academicRecordUrl = result.secure_url;
+        } catch (uploadErr) {
+            console.error("Error subiendo récord académico a Cloudinary:", uploadErr);
+            return res.status(500).json({ error: "No se pudo subir el reporte académico. Inténtalo de nuevo." });
+        }
+
+        const query = "INSERT INTO Tutor_Applications (user_id, motivation, selected_subjects, academic_record_url, status) VALUES (?, ?, ?, ?, 'PENDING')";
+        await db.query(query, [user_id, motivation, JSON.stringify(selected_subjects), academicRecordUrl]);
 
         res.status(201).json({ message: "Solicitud enviada con éxito al administrador." });
     } catch (error) {
@@ -401,3 +436,96 @@ export const deleteBadge = async (req, res) => {
     }
 };
 
+// 6. Reporte de datos del dashboard para descarga
+export const getReportData = async (req, res) => {
+    try {
+        // 1. Usuarios por rol
+        const [userRoles] = await db.query(`
+            SELECT r.name as role, COUNT(*) as count 
+            FROM Users u
+            JOIN User_Roles ur ON u.id = ur.user_id
+            JOIN Roles r ON ur.role_id = r.id
+            GROUP BY r.name
+        `);
+
+        // 2. Tutorías por estado
+        const [mentorshipStatuses] = await db.query(
+            "SELECT status, COUNT(*) as count FROM Mentorships GROUP BY status"
+        );
+
+        // 3. Calificación promedio
+        const [ratings] = await db.query(
+            "SELECT AVG(rating) as avg_rating, COUNT(*) as total_rated FROM Mentorships WHERE status = 'COMPLETADA' AND is_rated = 1 AND is_deleted = 0"
+        );
+
+        // 4. Almacenamiento
+        const [storage] = await db.query(
+            "SELECT SUM(file_size) as total_bytes FROM Repository_Materials"
+        );
+
+        // 5. Top 5 mentores con más tutorías completadas
+        const [topMentors] = await db.query(`
+            SELECT p.full_name, COUNT(*) as total_completed
+            FROM Mentorships m
+            JOIN Profiles p ON m.mentor_id = p.user_id
+            WHERE m.status = 'COMPLETADA' AND m.is_deleted = 0
+            GROUP BY m.mentor_id, p.full_name
+            ORDER BY total_completed DESC
+            LIMIT 5
+        `);
+
+        // 6. Top 5 materias más solicitadas
+        const [topSubjects] = await db.query(`
+            SELECT s.name, COUNT(*) as total_requests
+            FROM Mentorships m
+            JOIN Subjects s ON m.subject_id = s.id
+            WHERE m.is_deleted = 0
+            GROUP BY m.subject_id, s.name
+            ORDER BY total_requests DESC
+            LIMIT 5
+        `);
+
+        // 7. Solicitudes de mentores por estado
+        const [appStats] = await db.query(
+            "SELECT status, COUNT(*) as count FROM Tutor_Applications GROUP BY status"
+        );
+
+        // 8. Tickets por estado
+        const [ticketStats] = await db.query(
+            "SELECT status, COUNT(*) as count FROM Support_Tickets GROUP BY status"
+        );
+
+        // Formatear
+        const rolesCount = { MENTOR: 0, APRENDIZ: 0, ADMIN: 0 };
+        userRoles.forEach(r => { if (rolesCount[r.role] !== undefined) rolesCount[r.role] = r.count; });
+
+        const statusCount = { PENDIENTE: 0, ACEPTADA: 0, RECHAZADA: 0, COMPLETADA: 0, CANCELADA: 0 };
+        mentorshipStatuses.forEach(s => { if (statusCount[s.status] !== undefined) statusCount[s.status] = s.count; });
+
+        const totalUsers = Object.values(rolesCount).reduce((a, b) => a + b, 0);
+        const totalMentorships = Object.values(statusCount).reduce((a, b) => a + b, 0);
+        const avgRating = ratings[0]?.avg_rating ? parseFloat(Number(ratings[0].avg_rating).toFixed(1)) : 0;
+        const totalRated = ratings[0]?.total_rated || 0;
+        const totalMB = storage[0]?.total_bytes ? parseFloat((storage[0].total_bytes / (1024 * 1024)).toFixed(2)) : 0.0;
+
+        const appStatusCount = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
+        appStats.forEach(a => { if (appStatusCount[a.status] !== undefined) appStatusCount[a.status] = a.count; });
+
+        const ticketStatusCount = { OPEN: 0, IN_PROGRESS: 0, RESOLVED: 0 };
+        ticketStats.forEach(t => { if (ticketStatusCount[t.status] !== undefined) ticketStatusCount[t.status] = t.count; });
+
+        res.json({
+            generatedAt: new Date().toISOString(),
+            users: { total: totalUsers, roles: rolesCount },
+            mentorships: { total: totalMentorships, statuses: statusCount, averageRating: avgRating, totalRated },
+            topMentors,
+            topSubjects,
+            storage: { usedMB: totalMB },
+            applications: appStatusCount,
+            tickets: ticketStatusCount
+        });
+    } catch (error) {
+        console.error("Error al generar datos del reporte:", error);
+        res.status(500).json({ error: "Error al generar el reporte" });
+    }
+};
