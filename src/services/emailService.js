@@ -181,3 +181,49 @@ export const sendMentorshipReprogramEmail = async (toEmail, recipientName, sende
     return sendMailHelper(toEmail, `Propuesta de Reprogramación de Tutoría - ${subjectName}`, htmlContent);
 };
 
+export const sendMentorshipReminderEmail = async (toEmail, recipientName, partnerName, partnerRole, subjectName, scheduledDate, modality, meetingPlace, platform, meetingLink) => {
+    const formattedDate = new Date(scheduledDate).toLocaleString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    let locationInfo = '';
+    if (modality === 'Online') {
+        locationInfo = `<strong>Plataforma:</strong> ${platform || 'No especificada'}<br/>`;
+        if (meetingLink) {
+            locationInfo += `<strong>Enlace de reunión:</strong> <a href="${meetingLink}">${meetingLink}</a><br/>`;
+        }
+    } else {
+        locationInfo = `<strong>Lugar de encuentro:</strong> ${meetingPlace || 'No especificado'}<br/>`;
+    }
+
+    const partnerRoleText = partnerRole === 'MENTOR' ? 'Tutor' : 'Aprendiz';
+
+    const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+            <h2 style="color: #0b2239; text-align: center;">⏰ Recordatorio de Tutoría Próxima</h2>
+            <p style="color: #333; font-size: 16px;">Hola <strong>${recipientName}</strong>,</p>
+            <p style="color: #333; font-size: 16px;">Te recordamos que tienes una tutoría programada que iniciará pronto.</p>
+            
+            <div style="background-color: #f4f6f8; border: 1px solid #eaeaea; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 15px; color: #333; line-height: 1.6;">
+                <strong>Materia:</strong> ${subjectName}<br/>
+                <strong>Fecha y Hora:</strong> ${formattedDate}<br/>
+                <strong>Modalidad:</strong> ${modality}<br/>
+                ${locationInfo}
+                <strong>${partnerRoleText}:</strong> ${partnerName}
+            </div>
+            
+            <p style="color: #666; font-size: 14px;">Por favor, conéctate o asiste puntualmente. Si tienes algún inconveniente, puedes comunicarte con tu compañero o reprogramar la tutoría desde la plataforma.</p>
+            <hr style="border: none; border-top: 1px solid #eaeaea; margin: 20px 0;" />
+            <p style="color: #999; font-size: 12px; text-align: center;">Pilas! Tutorías &copy; ${new Date().getFullYear()}</p>
+        </div>
+    `;
+
+    return sendMailHelper(toEmail, `⏰ Recordatorio de Tutoría Próxima - ${subjectName}`, htmlContent);
+};
+
+

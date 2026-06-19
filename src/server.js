@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
 import { registerChatSocket } from './sockets/chatSocket.js';
+import { initReminderScheduler } from './services/reminderScheduler.js';
 
 import db from './config/db.js';
 import connectMongo from './config/mongo.js';
@@ -23,7 +24,9 @@ const io = new Server(server, {
 });
 
 registerChatSocket(io);
+initReminderScheduler();
 
 server.listen(PORT, () => {
     console.log(`Servidor backend y WebSockets corriendo en puerto ${PORT}`);
 });
+
