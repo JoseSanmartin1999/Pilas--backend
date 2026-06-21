@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import { parseAndFormatEcuadorDate } from '../utils/dateUtils.js';
 
 dotenv.config();
 
@@ -112,7 +113,18 @@ export const sendEmailVerificationEmail = async (toEmail, code) => {
     return sendMailHelper(toEmail, 'Verifica tu Cuenta - Pilas! Tutorías', htmlContent);
 };
 
-export const sendMentorshipStatusEmail = async (toEmail, apprenticeName, mentorName, status, subjectName) => {
+export const sendMentorshipStatusEmail = async (
+    toEmail, 
+    apprenticeName, 
+    mentorName, 
+    status, 
+    subjectName,
+    scheduledDate,
+    modality,
+    meetingPlace,
+    platform,
+    meetingLink
+) => {
     let statusText = '';
     let color = '';
     
@@ -126,10 +138,37 @@ export const sendMentorshipStatusEmail = async (toEmail, apprenticeName, mentorN
         return; // Solo enviar si es aceptada o rechazada
     }
 
+    let detailsHtml = '';
+    if (status === 'ACEPTADA' && scheduledDate) {
+        const formattedDate = parseAndFormatEcuadorDate(scheduledDate);
+        
+        let locationInfo = '';
+        if (modality === 'Online') {
+            locationInfo = `<strong>Plataforma:</strong> ${platform || 'No especificada'}<br/>`;
+            if (meetingLink) {
+                locationInfo += `<strong>Enlace de reunión:</strong> <a href="${meetingLink}">${meetingLink}</a><br/>`;
+            }
+        } else {
+            locationInfo = `<strong>Lugar de encuentro:</strong> ${meetingPlace || 'No especificado'}<br/>`;
+        }
+
+        detailsHtml = `
+            <div style="background-color: #f4f6f8; border: 1px solid #eaeaea; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 15px; color: #333; line-height: 1.6;">
+                <strong>Detalles de la Tutoría Aceptada:</strong><br/>
+                <strong>Materia:</strong> ${subjectName}<br/>
+                <strong>Fecha y Hora:</strong> ${formattedDate}<br/>
+                <strong>Modalidad:</strong> ${modality}<br/>
+                ${locationInfo}
+                <strong>Solicitante (Aprendiz):</strong> ${apprenticeName}<br/>
+                <strong>Tutor:</strong> ${mentorName}
+            </div>
+        `;
+    }
+
     const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
             <h2 style="color: #0b2239; text-align: center;">Actualización de Tutoría</h2>
-            <p style="color: #333; font-size: 16px;">Hola ${apprenticeName},</p>
+            <p style="color: #333; font-size: 16px;">Hola <strong>${apprenticeName}</strong>,</p>
             <p style="color: #333; font-size: 16px;">Te informamos que el mentor <strong>${mentorName}</strong> ${statusText} tu solicitud de tutoría para la materia <strong>${subjectName}</strong>.</p>
             
             <div style="text-align: center; margin: 30px 0;">
@@ -137,6 +176,8 @@ export const sendMentorshipStatusEmail = async (toEmail, apprenticeName, mentorN
                     ESTADO: ${status}
                 </span>
             </div>
+            
+            ${detailsHtml}
             
             <p style="color: #666; font-size: 14px;">Inicia sesión en Pilas! Tutorías para ver más detalles en tu bandeja de mensajes o solicitudes.</p>
             <hr style="border: none; border-top: 1px solid #eaeaea; margin: 20px 0;" />
@@ -147,28 +188,49 @@ export const sendMentorshipStatusEmail = async (toEmail, apprenticeName, mentorN
     return sendMailHelper(toEmail, `Actualización de tu solicitud de tutoría - ${subjectName}`, htmlContent);
 };
 
-export const sendMentorshipReprogramEmail = async (toEmail, recipientName, senderName, subjectName, newDate, reason, initiatorRole) => {
-    const formattedDate = new Date(newDate).toLocaleString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'America/Guayaquil'
-    });
+export const sendMentorshipReprogramEmail = async (
+    toEmail, 
+    recipientName, 
+    apprenticeName, 
+    mentorName, 
+    subjectName, 
+    newDate, 
+    reason, 
+    initiatorRole,
+    modality,
+    meetingPlace,
+    platform,
+    meetingLink
+) => {
+    const formattedDate = parseAndFormatEcuadorDate(newDate);
 
     const roleText = initiatorRole === 'MENTOR' ? 'el tutor' : 'el aprendiz';
+    const senderName = initiatorRole === 'MENTOR' ? mentorName : apprenticeName;
+
+    let locationInfo = '';
+    if (modality === 'Online') {
+        locationInfo = `<strong>Plataforma:</strong> ${platform || 'No especificada'}<br/>`;
+        if (meetingLink) {
+            locationInfo += `<strong>Enlace de reunión:</strong> <a href="${meetingLink}">${meetingLink}</a><br/>`;
+        }
+    } else {
+        locationInfo = `<strong>Lugar de encuentro:</strong> ${meetingPlace || 'No especificado'}<br/>`;
+    }
 
     const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
             <h2 style="color: #0b2239; text-align: center;">Propuesta de Reprogramación</h2>
-            <p style="color: #333; font-size: 16px;">Hola ${recipientName},</p>
+            <p style="color: #333; font-size: 16px;">Hola <strong>${recipientName}</strong>,</p>
             <p style="color: #333; font-size: 16px;">Te informamos que <strong>${senderName}</strong> (${roleText}) ha propuesto reprogramar la tutoría de la materia <strong>${subjectName}</strong>.</p>
             
             <div style="background-color: #fcf8e3; border: 1px solid #faebcc; color: #8a6d3b; padding: 15px; border-radius: 5px; margin: 20px 0; font-size: 15px;">
-                <strong>Nueva Fecha Propuesta:</strong><br/>
-                ${formattedDate}<br/><br/>
+                <strong>Nueva Propuesta de Tutoría:</strong><br/>
+                <strong>Materia:</strong> ${subjectName}<br/>
+                <strong>Fecha y Hora Propuesta:</strong> ${formattedDate}<br/>
+                <strong>Modalidad:</strong> ${modality || 'No especificada'}<br/>
+                ${locationInfo}
+                <strong>Solicitante (Aprendiz):</strong> ${apprenticeName}<br/>
+                <strong>Tutor:</strong> ${mentorName}<br/><br/>
                 <strong>Motivo del Cambio:</strong><br/>
                 ${reason || 'No especificado'}
             </div>
@@ -182,16 +244,19 @@ export const sendMentorshipReprogramEmail = async (toEmail, recipientName, sende
     return sendMailHelper(toEmail, `Propuesta de Reprogramación de Tutoría - ${subjectName}`, htmlContent);
 };
 
-export const sendMentorshipReminderEmail = async (toEmail, recipientName, partnerName, partnerRole, subjectName, scheduledDate, modality, meetingPlace, platform, meetingLink) => {
-    const formattedDate = new Date(scheduledDate).toLocaleString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'America/Guayaquil'
-    });
+export const sendMentorshipReminderEmail = async (
+    toEmail, 
+    recipientName, 
+    apprenticeName, 
+    mentorName, 
+    subjectName, 
+    scheduledDate, 
+    modality, 
+    meetingPlace, 
+    platform, 
+    meetingLink
+) => {
+    const formattedDate = parseAndFormatEcuadorDate(scheduledDate);
 
     let locationInfo = '';
     if (modality === 'Online') {
@@ -202,8 +267,6 @@ export const sendMentorshipReminderEmail = async (toEmail, recipientName, partne
     } else {
         locationInfo = `<strong>Lugar de encuentro:</strong> ${meetingPlace || 'No especificado'}<br/>`;
     }
-
-    const partnerRoleText = partnerRole === 'MENTOR' ? 'Tutor' : 'Aprendiz';
 
     const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
@@ -216,7 +279,8 @@ export const sendMentorshipReminderEmail = async (toEmail, recipientName, partne
                 <strong>Fecha y Hora:</strong> ${formattedDate}<br/>
                 <strong>Modalidad:</strong> ${modality}<br/>
                 ${locationInfo}
-                <strong>${partnerRoleText}:</strong> ${partnerName}
+                <strong>Solicitante (Aprendiz):</strong> ${apprenticeName}<br/>
+                <strong>Tutor:</strong> ${mentorName}
             </div>
             
             <p style="color: #666; font-size: 14px;">Por favor, conéctate o asiste puntualmente. Si tienes algún inconveniente, puedes comunicarte con tu compañero o reprogramar la tutoría desde la plataforma.</p>

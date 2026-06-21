@@ -4,6 +4,7 @@ import {
     getStats,
     getUsers,
     updateUserStatus,
+    updateUserRole,
     deleteUser,
     getApplications,
     createApplication,
@@ -15,7 +16,16 @@ import {
     createBadge,
     updateBadge,
     deleteBadge,
-    getReportData
+    getReportData,
+    getCareers,
+    createCareer,
+    updateCareer,
+    deleteCareer,
+    uploadCareerMalla,
+    getCareerSubjects,
+    createSubject,
+    updateSubject,
+    deleteSubject
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -27,7 +37,19 @@ router.get('/report', getReportData);
 // Gestión de usuarios
 router.get('/users', getUsers);
 router.put('/users/:id/status', updateUserStatus);
+router.put('/users/:id/role', updateUserRole);
 router.delete('/users/:id', deleteUser);
+
+// Gestión de carreras
+router.get('/careers', getCareers);
+router.post('/careers', createCareer);
+router.put('/careers/:id', updateCareer);
+router.delete('/careers/:id', deleteCareer);
+
+// Gestión de materias
+router.post('/subjects', createSubject);
+router.put('/subjects/:id', updateSubject);
+router.delete('/subjects/:id', deleteSubject);
 
 // Solicitudes a tutores
 // Multer con memoryStorage para subir reporte académico (PDF, max 10MB)
@@ -42,6 +64,9 @@ const applicationUpload = multer({
         }
     }
 });
+
+router.post('/careers/:id/malla', applicationUpload.single('malla_pdf'), uploadCareerMalla);
+router.get('/careers/:id/subjects', getCareerSubjects);
 
 router.get('/tutors/applications', getApplications);
 router.post('/tutors/applications', applicationUpload.single('academic_record'), createApplication);

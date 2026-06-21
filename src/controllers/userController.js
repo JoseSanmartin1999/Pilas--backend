@@ -1,6 +1,7 @@
 import db from '../config/db.js';
 import cloudinary from '../config/cloudinary.js';
 import { checkAndAwardBadges } from '../services/gamificationService.js';
+import { getEcuadorDateTime } from '../utils/dateUtils.js';
 
 // Datos estáticos (Mocks) mientras se implementan las tablas de lógica de negocio
 const DEFAULT_SCORE = 4.5;
@@ -145,12 +146,12 @@ const enrichUserProfileData = async (user) => {
             FROM Mentorships m
             JOIN Subjects s ON m.subject_id = s.id
             WHERE (m.mentor_id = ? OR m.apprentice_id = ?) 
-              AND m.scheduled_date >= NOW() 
+              AND m.scheduled_date >= ? 
               AND m.is_deleted = 0 
               AND m.status NOT IN ('RECHAZADA', 'CANCELADA')
             ORDER BY m.scheduled_date ASC
         `;
-        const [rows] = await db.query(query, [user.id, user.id]);
+        const [rows] = await db.query(query, [user.id, user.id, getEcuadorDateTime()]);
         tutorias = rows;
     } catch (e) {
         console.error("Error fetching upcoming mentorships for profile:", e.message);
@@ -188,7 +189,7 @@ const enrichUserProfileData = async (user) => {
     let userBadges = [];
     try {
         const queryBadges = `
-            SELECT b.id, b.name, b.image_url, b.criteria, b.xp_reward, b.coins_reward, ub.earned_at
+            SELECT b.id, b.name, b.image_url, b.criteria, b.xp_reward, b.coins_reward, ub.earned_at, ub.is_featured
             FROM Badges b
             INNER JOIN User_Badges ub ON b.id = ub.badge_id
             WHERE ub.user_id = ?
@@ -196,10 +197,73 @@ const enrichUserProfileData = async (user) => {
         const [badgeRows] = await db.query(queryBadges, [user.id]);
         userBadges = badgeRows.map(b => ({
             ...b,
+            is_featured: !!b.is_featured,
             icon: b.image_url // Para compatibilidad con el frontend
         }));
     } catch (e) {
         console.error("Error fetching user badges from DB:", e.message);
+    }
+
+    // Obtener horas acumuladas por materia como aprendiz
+    let apprenticeHours = [];
+    try {
+        const queryAppr = `
+            SELECT 
+                s.id as subject_id, 
+                s.name as subject_name,
+                SUM(
+                    CASE 
+                        WHEN m.estimated_duration LIKE '%45%' THEN 0.75
+                        WHEN m.estimated_duration LIKE '%1.5%' THEN 1.5
+                        WHEN m.estimated_duration LIKE '%2%' THEN 2.0
+                        ELSE 1.0
+                    END
+                ) as total_hours
+            FROM Mentorships m
+            JOIN Subjects s ON m.subject_id = s.id
+            WHERE m.status = 'COMPLETADA' 
+              AND m.is_deleted = 0
+              AND m.apprentice_id = ?
+            GROUP BY s.id, s.name
+        `;
+        const [apprRows] = await db.query(queryAppr, [user.id]);
+        apprenticeHours = apprRows.map(r => ({
+            ...r,
+            total_hours: parseFloat(Number(r.total_hours).toFixed(2))
+        }));
+    } catch (e) {
+        console.error("Error fetching apprentice hours:", e.message);
+    }
+
+    // Obtener horas acumuladas por materia como mentor
+    let mentorHours = [];
+    try {
+        const queryMentor = `
+            SELECT 
+                s.id as subject_id, 
+                s.name as subject_name,
+                SUM(
+                    CASE 
+                        WHEN m.estimated_duration LIKE '%45%' THEN 0.75
+                        WHEN m.estimated_duration LIKE '%1.5%' THEN 1.5
+                        WHEN m.estimated_duration LIKE '%2%' THEN 2.0
+                        ELSE 1.0
+                    END
+                ) as total_hours
+            FROM Mentorships m
+            JOIN Subjects s ON m.subject_id = s.id
+            WHERE m.status = 'COMPLETADA' 
+              AND m.is_deleted = 0
+              AND m.mentor_id = ?
+            GROUP BY s.id, s.name
+        `;
+        const [mentorRows] = await db.query(queryMentor, [user.id]);
+        mentorHours = mentorRows.map(r => ({
+            ...r,
+            total_hours: parseFloat(Number(r.total_hours).toFixed(2))
+        }));
+    } catch (e) {
+        console.error("Error fetching mentor hours:", e.message);
     }
 
     return {
@@ -207,7 +271,9 @@ const enrichUserProfileData = async (user) => {
         score,
         badges: userBadges,
         tutorias,
-        comments
+        comments,
+        apprentice_hours: apprenticeHours,
+        mentor_hours: mentorHours
     };
 };
 
@@ -280,5 +346,56 @@ export const upgradeToMentor = async (req, res) => {
     } catch (error) {
         console.error("Error al ascender a Mentor:", error);
         res.status(500).json({ error: "No se pudo procesar la solicitud de ascenso a tutor." });
+    }
+};
+
+export const updateFeaturedBadges = async (req, res) => {
+    const { id } = req.params;
+    const { badgeIds } = req.body; // Array de IDs de insignias, ej: [1, 2, 4]
+
+    if (!Array.isArray(badgeIds)) {
+        return res.status(400).json({ error: "badgeIds debe ser un arreglo de números." });
+    }
+
+    if (badgeIds.length > 4) {
+        return res.status(400).json({ error: "Solo puedes destacar hasta 4 logros/insignias." });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Desmarcar todas las insignias destacadas de este usuario
+        await connection.query(
+            "UPDATE User_Badges SET is_featured = 0 WHERE user_id = ?",
+            [id]
+        );
+
+        // 2. Si hay insignias seleccionadas, marcarlas como destacadas
+        if (badgeIds.length > 0) {
+            // Verificar que el usuario posea estas insignias
+            const [owned] = await connection.query(
+                "SELECT badge_id FROM User_Badges WHERE user_id = ? AND badge_id IN (?)",
+                [id, badgeIds]
+            );
+
+            const ownedIds = owned.map(o => o.badge_id);
+            if (ownedIds.length > 0) {
+                await connection.query(
+                    "UPDATE User_Badges SET is_featured = 1 WHERE user_id = ? AND badge_id IN (?)",
+                    [id, ownedIds]
+                );
+            }
+        }
+
+        await connection.commit();
+        res.json({ message: "Insignias destacadas actualizadas correctamente." });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error("Error al actualizar insignias destacadas:", error);
+        res.status(500).json({ error: "Error al actualizar insignias destacadas." });
+    } finally {
+        if (connection) connection.release();
     }
 };

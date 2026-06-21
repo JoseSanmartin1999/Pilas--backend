@@ -1,6 +1,8 @@
 import db from '../config/db.js';
 import { uploadToImageKit } from '../config/imagekit.js';
 import { uploadToCloudinary } from '../config/cloudinaryRepository.js';
+import { PDFParse } from 'pdf-parse';
+import fs from 'fs';
 
 // 1. Estadísticas de la página
 export const getStats = async (req, res) => {
@@ -105,12 +107,42 @@ export const updateUserStatus = async (req, res) => {
 
 export const deleteUser = async (req, res) => {
     const { id } = req.params;
+    let connection;
     try {
-        await db.query("DELETE FROM Users WHERE id = ?", [id]);
-        res.json({ message: "Usuario eliminado correctamente" });
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Eliminar el feedback asociado a las tutorías de este usuario
+        await connection.query(
+            `DELETE FROM Feedback 
+             WHERE mentorship_id IN (SELECT id FROM Mentorships WHERE mentor_id = ? OR apprentice_id = ?)`,
+            [id, id]
+        );
+
+        // 2. Eliminar materiales del repositorio asociados a las tutorías de este usuario
+        await connection.query(
+            `DELETE FROM Repository_Materials 
+             WHERE mentorship_id IN (SELECT id FROM Mentorships WHERE mentor_id = ? OR apprentice_id = ?)`,
+            [id, id]
+        );
+
+        // 2. Eliminar las tutorías/mentorías donde el usuario sea mentor o aprendiz
+        await connection.query(
+            "DELETE FROM Mentorships WHERE mentor_id = ? OR apprentice_id = ?",
+            [id, id]
+        );
+
+        // 3. Eliminar el usuario (esto eliminará cascada en Profiles, User_Roles, Tutor_Applications, Support_Tickets, User_Badges, Mentor_Subjects)
+        await connection.query("DELETE FROM Users WHERE id = ?", [id]);
+
+        await connection.commit();
+        res.json({ message: "Usuario y sus datos asociados eliminados correctamente" });
     } catch (error) {
+        if (connection) await connection.rollback();
         console.error("Error al eliminar usuario:", error);
         res.status(500).json({ error: "No se pudo eliminar el usuario" });
+    } finally {
+        if (connection) connection.release();
     }
 };
 
@@ -529,3 +561,425 @@ export const getReportData = async (req, res) => {
         res.status(500).json({ error: "Error al generar el reporte" });
     }
 };
+
+// 7. Actualizar rol de usuario
+export const updateUserRole = async (req, res) => {
+    const { id } = req.params;
+    const { role } = req.body; // 'ADMIN', 'MENTOR' o 'APRENDIZ'
+
+    if (!['ADMIN', 'MENTOR', 'APRENDIZ'].includes(role)) {
+        return res.status(400).json({ error: "Rol inválido. Debe ser ADMIN, MENTOR o APRENDIZ." });
+    }
+
+    const roleMap = {
+        'ADMIN': 1,
+        'MENTOR': 2,
+        'APRENDIZ': 3
+    };
+    const roleId = roleMap[role];
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Actualizar la relación en la tabla 'User_Roles'
+        await connection.query("DELETE FROM User_Roles WHERE user_id = ?", [id]);
+        await connection.query("INSERT INTO User_Roles (user_id, role_id) VALUES (?, ?)", [id, roleId]);
+
+        // 3. Si deja de ser MENTOR, eliminar sus materias asociadas para no aparecer en la lista de tutores
+        if (role !== 'MENTOR') {
+            await connection.query("DELETE FROM Mentor_Subjects WHERE mentor_id = ?", [id]);
+        }
+
+        await connection.commit();
+        res.json({ message: `Rol del usuario actualizado a ${role} correctamente.` });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error("Error al actualizar rol del usuario:", error);
+        res.status(500).json({ error: "No se pudo actualizar el rol del usuario." });
+    } finally {
+        if (connection) connection.release();
+    }
+};
+
+// ==========================================
+// GESTIÓN DE CARRERAS (CRUD)
+// ==========================================
+
+export const getCareers = async (req, res) => {
+    try {
+        const [careers] = await db.query("SELECT * FROM Careers ORDER BY name ASC");
+        res.json(careers);
+    } catch (error) {
+        console.error("Error al obtener carreras:", error);
+        res.status(500).json({ error: "Error al cargar carreras" });
+    }
+};
+
+export const createCareer = async (req, res) => {
+    const { name, description } = req.body;
+    if (!name) {
+        return res.status(400).json({ error: "El nombre de la carrera es requerido." });
+    }
+    try {
+        const [result] = await db.query(
+            "INSERT INTO Careers (name, description) VALUES (?, ?)",
+            [name, description || null]
+        );
+        res.status(201).json({
+            message: "Carrera creada exitosamente.",
+            careerId: result.insertId
+        });
+    } catch (error) {
+        console.error("Error al crear carrera:", error);
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: "Ya existe una carrera con ese nombre." });
+        }
+        res.status(500).json({ error: "No se pudo crear la carrera." });
+    }
+};
+
+export const updateCareer = async (req, res) => {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    if (!name) {
+        return res.status(400).json({ error: "El nombre de la carrera es requerido." });
+    }
+    try {
+        const [result] = await db.query(
+            "UPDATE Careers SET name = ?, description = ? WHERE id = ?",
+            [name, description || null, id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Carrera no encontrada." });
+        }
+        res.json({ message: "Carrera actualizada exitosamente." });
+    } catch (error) {
+        console.error("Error al actualizar carrera:", error);
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: "Ya existe una carrera con ese nombre." });
+        }
+        res.status(500).json({ error: "No se pudo actualizar la carrera." });
+    }
+};
+
+export const deleteCareer = async (req, res) => {
+    const { id } = req.params;
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Obtener todas las materias de esta carrera
+        const [subjects] = await connection.query("SELECT id FROM Subjects WHERE career_id = ?", [id]);
+        
+        if (subjects.length > 0) {
+            const subjectIds = subjects.map(s => s.id);
+            
+            // 2. Eliminar relaciones en Mentor_Subjects
+            await connection.query("DELETE FROM Mentor_Subjects WHERE subject_id IN (?)", [subjectIds]);
+
+            // 3. Establecer subject_id en NULL en Mentorships para las materias de esta carrera
+            await connection.query("UPDATE Mentorships SET subject_id = NULL WHERE subject_id IN (?)", [subjectIds]);
+        }
+
+        // 4. Eliminar la carrera (las materias se eliminarán en cascada por foreign key)
+        const [result] = await connection.query("DELETE FROM Careers WHERE id = ?", [id]);
+
+        if (result.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: "Carrera no encontrada." });
+        }
+
+        await connection.commit();
+        res.json({ message: "Carrera y sus materias asociadas eliminadas exitosamente." });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error("Error al eliminar carrera:", error);
+        res.status(500).json({ error: "No se pudo eliminar la carrera debido a un conflicto de integridad." });
+    } finally {
+        if (connection) connection.release();
+    }
+};
+
+export const uploadCareerMalla = async (req, res) => {
+    const { id } = req.params;
+    if (!req.file) {
+        return res.status(400).json({ error: "Debes subir un archivo PDF de la malla curricular." });
+    }
+
+    let connection;
+    try {
+        // 1. Verificar carrera existente
+        const [careers] = await db.query("SELECT * FROM Careers WHERE id = ?", [id]);
+        if (careers.length === 0) {
+            return res.status(404).json({ error: "Carrera no encontrada." });
+        }
+
+        // 2. Analizar PDF con coordenadas
+        const parser = new PDFParse({ data: req.file.buffer });
+        const doc = await parser.load();
+        const numPages = doc.numPages || 1;
+        const candidates = [];
+        const noiseWords = ['PAO', 'SEMESTRE', 'NIVEL', 'UNIDAD', 'MATERIA', 'INTEGRACIÓN', 'INTEGRACION', 'CURRICULAR', 'CARRERA', 'ESPE', 'TOTAL', 'BÁSICA', 'BASICA', 'PROFESIONAL'];
+
+        for (let pNum = 1; pNum <= numPages; pNum++) {
+            const page = await doc.getPage(pNum);
+            const textContent = await page.getTextContent();
+            const items = textContent.items || [];
+            
+            // Separar códigos de materia y otros textos
+            const codeItems = [];
+            const otherItems = [];
+            
+            for (const item of items) {
+                if (!item.str) continue;
+                const str = item.str.trim();
+                // Buscar códigos con formato EXCT-A0302, EXCTA0302, etc. (deben contener al menos un dígito)
+                if (/\b([A-Z]{3,6}-?[A-Z0-9]{3,5})\b/.test(str) && /\d/.test(str)) {
+                    codeItems.push({
+                        code: str,
+                        x: item.transform[4],
+                        y: item.transform[5]
+                    });
+                } else {
+                    otherItems.push({
+                        text: str,
+                        x: item.transform[4],
+                        y: item.transform[5]
+                    });
+                }
+            }
+            
+            // Emparejar cada código con su nombre correspondiente en esta página
+            for (const code of codeItems) {
+                // Intentar Caso A: Vertical stack (abajo del código)
+                let nearbyTexts = otherItems
+                    .map(other => {
+                        const dx = other.x - code.x;
+                        const dy = code.y - other.y;
+                        return { ...other, dx, dy, dist: Math.sqrt(dx*dx + dy*dy) };
+                    })
+                    .filter(other => Math.abs(other.dx) < 45 && other.dy > 5 && other.dy < 25)
+                    .sort((a, b) => a.dy - b.dy);
+                
+                // Si no se encuentra, intentar Caso B: Horizontal line (a la derecha en la misma línea)
+                if (nearbyTexts.length === 0) {
+                    nearbyTexts = otherItems
+                        .map(other => {
+                            const dx = other.x - code.x;
+                            const dy = code.y - other.y;
+                            return { ...other, dx, dy, dist: Math.sqrt(dx*dx + dy*dy) };
+                        })
+                        .filter(other => Math.abs(other.dy) < 5 && other.dx > 15 && other.dx < 220)
+                        .sort((a, b) => a.dx - b.dx);
+                }
+                
+                if (nearbyTexts.length > 0) {
+                    const nameParts = nearbyTexts
+                        .filter(n => {
+                            const t = n.text.trim();
+                            if (['CD', 'CPE', 'CA', 'HS', 'HPAO', 'NIVELACION', 'NIVELACIÓN'].includes(t)) return false;
+                            if (/^[0-9,.]+$/.test(t)) return false;
+                            return true;
+                        })
+                        .map(n => n.text.trim());
+                    
+                    const name = nameParts.join(' ').replace(/\s+/g, ' ').trim();
+                    
+                    if (name && name.length > 3) {
+                        const hasNoise = noiseWords.some(word => name.toUpperCase().includes(word));
+                        if (!hasNoise) {
+                            candidates.push({
+                                code: code.code,
+                                name: name,
+                                y: code.y,
+                                x: code.x,
+                                page: pNum
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Agrupar por página y por coordenada Y (con tolerancia de 10 puntos)
+        const pagesGroups = {};
+        for (const cand of candidates) {
+            if (!pagesGroups[cand.page]) {
+                pagesGroups[cand.page] = [];
+            }
+            const rows = pagesGroups[cand.page];
+            let foundRow = rows.find(r => Math.abs(r.y - cand.y) < 10);
+            if (foundRow) {
+                foundRow.subjects.push(cand);
+                // Recalcular promedio Y
+                foundRow.y = (foundRow.y * (foundRow.subjects.length - 1) + cand.y) / foundRow.subjects.length;
+            } else {
+                rows.push({
+                    y: cand.y,
+                    subjects: [cand]
+                });
+            }
+        }
+
+        // 4. Ordenar y asignar semestres secuencialmente
+        const uniqueSubjects = [];
+        const seen = new Set();
+        let semesterCounter = 1;
+        
+        const sortedPageNums = Object.keys(pagesGroups).map(Number).sort((a, b) => a - b);
+        
+        for (const pNum of sortedPageNums) {
+            const rows = pagesGroups[pNum];
+            // Ordenar filas de arriba a abajo (Y descendente)
+            rows.sort((a, b) => b.y - a.y);
+            
+            for (const row of rows) {
+                row.subjects.forEach(sub => {
+                    const nameLower = sub.name.toLowerCase();
+                    if (!seen.has(nameLower)) {
+                        seen.add(nameLower);
+                        uniqueSubjects.push({
+                            name: sub.name,
+                            code: sub.code,
+                            semester: semesterCounter
+                        });
+                    }
+                });
+                semesterCounter++;
+            }
+        }
+
+        if (uniqueSubjects.length === 0) {
+            return res.status(400).json({ error: "No se encontraron materias válidas en el PDF. Verifica que contenga texto y no sea una imagen." });
+        }
+
+        // 5. Guardar materias en DB bajo transacción
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        for (const sub of uniqueSubjects) {
+            const [existing] = await connection.query(
+                "SELECT * FROM Subjects WHERE name = ? AND career_id = ?",
+                [sub.name, id]
+            );
+            if (existing.length === 0) {
+                await connection.query(
+                    "INSERT INTO Subjects (name, semester, code, career_id) VALUES (?, ?, ?, ?)",
+                    [sub.name, sub.semester, sub.code, id]
+                );
+            }
+        }
+
+        await connection.commit();
+
+        res.json({
+            message: `Malla curricular procesada con éxito. Se detectaron y agregaron ${uniqueSubjects.length} materias.`,
+            mallaUrl: null,
+            subjectsCount: uniqueSubjects.length,
+            subjects: uniqueSubjects
+        });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error("Error al procesar malla PDF:", error);
+        res.status(500).json({ error: "Error interno al escanear la malla." });
+    } finally {
+        if (connection) connection.release();
+    }
+};
+
+// ==========================================
+// GESTIÓN DE MATERIAS (CRUD)
+// ==========================================
+
+export const getCareerSubjects = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [subjects] = await db.query(
+            "SELECT * FROM Subjects WHERE career_id = ? ORDER BY semester ASC, name ASC",
+            [id]
+        );
+        res.json(subjects);
+    } catch (error) {
+        console.error("Error al obtener materias de la carrera:", error);
+        res.status(500).json({ error: "No se pudieron cargar las materias." });
+    }
+};
+
+export const createSubject = async (req, res) => {
+    const { name, semester, code, career_id } = req.body;
+    if (!name || !semester || !career_id) {
+        return res.status(400).json({ error: "Nombre, semestre y carrera son requeridos." });
+    }
+    try {
+        const [result] = await db.query(
+            "INSERT INTO Subjects (name, semester, code, career_id) VALUES (?, ?, ?, ?)",
+            [name, parseInt(semester, 10), code || null, parseInt(career_id, 10)]
+        );
+        res.status(201).json({
+            message: "Materia creada correctamente.",
+            subjectId: result.insertId
+        });
+    } catch (error) {
+        console.error("Error al crear materia:", error);
+        res.status(500).json({ error: "No se pudo registrar la materia." });
+    }
+};
+
+export const updateSubject = async (req, res) => {
+    const { id } = req.params;
+    const { name, semester, code, career_id } = req.body;
+    if (!name || !semester || !career_id) {
+        return res.status(400).json({ error: "Nombre, semestre y carrera son requeridos." });
+    }
+    try {
+        const [result] = await db.query(
+            "UPDATE Subjects SET name = ?, semester = ?, code = ?, career_id = ? WHERE id = ?",
+            [name, parseInt(semester, 10), code || null, parseInt(career_id, 10), id]
+        );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Materia no encontrada." });
+        }
+        res.json({ message: "Materia actualizada correctamente." });
+    } catch (error) {
+        console.error("Error al actualizar materia:", error);
+        res.status(500).json({ error: "No se pudo actualizar la materia." });
+    }
+};
+
+export const deleteSubject = async (req, res) => {
+    const { id } = req.params;
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. Eliminar relaciones en Mentor_Subjects
+        await connection.query("DELETE FROM Mentor_Subjects WHERE subject_id = ?", [id]);
+
+        // 2. Establecer subject_id en NULL en Mentorships para desvincular sin romper claves foráneas
+        await connection.query("UPDATE Mentorships SET subject_id = NULL WHERE subject_id = ?", [id]);
+
+        // 3. Eliminar la materia
+        const [result] = await connection.query("DELETE FROM Subjects WHERE id = ?", [id]);
+
+        if (result.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: "Materia no encontrada." });
+        }
+
+        await connection.commit();
+        res.json({ message: "Materia eliminada correctamente." });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error("Error al eliminar materia:", error);
+        res.status(500).json({ error: "No se pudo eliminar la materia debido a un conflicto de integridad." });
+    } finally {
+        if (connection) connection.release();
+    }
+};
+
+

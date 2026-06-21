@@ -1,15 +1,21 @@
 import db from '../config/db.js';
 import { sendMentorshipReminderEmail } from './emailService.js';
+import { getEcuadorDateTime, getEcuadorDateTimeOffset } from '../utils/dateUtils.js';
 
 /**
  * Envía recordatorios para tutorías dentro de la ventana de tiempo especificada.
  * @param {string} intervalLabel - Etiqueta descriptiva (ej. "24 horas", "2 horas")
- * @param {string} intervalSQL - Intervalo SQL (ej. "24 HOUR", "2 HOUR")
+ * @param {number} intervalMs - Intervalo en milisegundos (ej. 2 * 3600000)
  * @param {string} flagColumn - Columna de la DB que indica si ya se envió (ej. "reminder_sent", "reminder_2h_sent")
  */
-async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
+async function sendRemindersForWindow(intervalLabel, intervalMs, flagColumn) {
     try {
         console.log(`⏰ Buscando tutorías próximas (siguientes ${intervalLabel}) para enviar recordatorios (${flagColumn})...`);
+        
+        // Calculamos el inicio y el fin de la ventana en hora local de Ecuador en JavaScript
+        const startTime = getEcuadorDateTime();
+        const endTime = getEcuadorDateTimeOffset(intervalMs);
+        
         const query = `
             SELECT m.id, m.scheduled_date, m.modality, m.meeting_place, m.platform, m.meeting_link,
                    s.name as subject_name,
@@ -24,9 +30,9 @@ async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
             WHERE m.status = 'ACEPTADA'
               AND m.${flagColumn} = 0
               AND m.is_deleted = 0
-              AND m.scheduled_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ${intervalSQL})
+              AND m.scheduled_date BETWEEN ? AND ?
         `;
-        const [mentorships] = await db.query(query);
+        const [mentorships] = await db.query(query, [startTime, endTime]);
 
         if (mentorships.length === 0) {
             console.log(`⏰ No se encontraron tutorías próximas (${intervalLabel}) que requieran recordatorio.`);
@@ -43,8 +49,8 @@ async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
                 await sendMentorshipReminderEmail(
                     m.apprentice_email,
                     m.apprentice_name || 'Estudiante',
+                    m.apprentice_name || 'Estudiante',
                     m.mentor_name || 'Tutor',
-                    'MENTOR',
                     m.subject_name,
                     m.scheduled_date,
                     m.modality,
@@ -62,7 +68,7 @@ async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
                     m.mentor_email,
                     m.mentor_name || 'Tutor',
                     m.apprentice_name || 'Aprendiz',
-                    'APRENDIZ',
+                    m.mentor_name || 'Tutor',
                     m.subject_name,
                     m.scheduled_date,
                     m.modality,
@@ -84,14 +90,14 @@ async function sendRemindersForWindow(intervalLabel, intervalSQL, flagColumn) {
 }
 
 export async function checkAndSendReminders() {
-    // Recordatorio de 24 horas (existente)
-    await sendRemindersForWindow('24 horas', '24 HOUR', 'reminder_sent');
+    // Recordatorio de 24 horas (24 * 60 * 60 * 1000 ms)
+    await sendRemindersForWindow('24 horas', 24 * 60 * 60 * 1000, 'reminder_sent');
 
-    // Recordatorio de 2 horas (nuevo)
-    await sendRemindersForWindow('2 horas', '2 HOUR', 'reminder_2h_sent');
+    // Recordatorio de 2 horas (2 * 60 * 60 * 1000 ms)
+    await sendRemindersForWindow('2 horas', 2 * 60 * 60 * 1000, 'reminder_2h_sent');
 
-    // Recordatorio de 10 minutos (nuevo)
-    await sendRemindersForWindow('10 minutos', '10 MINUTE', 'reminder_10m_sent');
+    // Recordatorio de 10 minutos (10 * 60 * 1000 ms)
+    await sendRemindersForWindow('10 minutos', 10 * 60 * 1000, 'reminder_10m_sent');
 }
 
 export function initReminderScheduler() {

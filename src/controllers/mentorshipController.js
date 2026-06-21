@@ -94,6 +94,7 @@ export const updateMentorship = async (req, res) => {
         // Primero obtenemos el estado actual para la lógica de contador y notificaciones
         const [current] = await db.query(`
             SELECT m.reprogramming_count, m.status, 
+                   m.scheduled_date, m.modality, m.meeting_place, m.platform, m.meeting_link,
                    a.email as apprentice_email, p_a.full_name as apprentice_name, 
                    mt.email as mentor_email, p_mt.full_name as mentor_name, 
                    s.name as subject_name
@@ -109,7 +110,7 @@ export const updateMentorship = async (req, res) => {
         
         let newCount = current[0].reprogramming_count;
         let finalStatus = status || current[0].status;
-
+ 
         // Lógica de reprogramación: si se propone cambio de fecha o lugar mientras está pendiente
         if (scheduled_date || meeting_place || modality) {
             newCount += 1;
@@ -118,15 +119,15 @@ export const updateMentorship = async (req, res) => {
                 finalStatus = 'CANCELADA';
             }
         }
-
+ 
         let query = "UPDATE Mentorships SET ";
         const params = [];
         const updates = [];
-
+ 
         // Siempre reseteamos la notificación del aprendiz si hay cambios
         updates.push("status = ?, apprentice_notified = 0, reprogramming_count = ?");
         params.push(finalStatus, newCount);
-
+ 
         if (scheduled_date) { updates.push("scheduled_date = ?"); params.push(scheduled_date); }
         if (meeting_link) { updates.push("meeting_link = ?"); params.push(meeting_link); }
         if (zoom_code) { updates.push("zoom_code = ?"); params.push(zoom_code); }
@@ -136,10 +137,10 @@ export const updateMentorship = async (req, res) => {
         if (platform) { updates.push("platform = ?"); params.push(platform); }
         if (reprogramming_reason) { updates.push("reprogramming_reason = ?"); params.push(reprogramming_reason); }
         if (last_initiator_role) { updates.push("last_initiator_role = ?"); params.push(last_initiator_role); }
-
+ 
         query += updates.join(", ") + " WHERE id = ?";
         params.push(id);
-
+ 
         await db.query(query, params);
         
         // Enviar correo de propuesta de reprogramación si hay cambio de fecha y se especifica el iniciador
@@ -150,11 +151,16 @@ export const updateMentorship = async (req, res) => {
                     await sendMentorshipReprogramEmail(
                         current[0].apprentice_email,
                         current[0].apprentice_name,
+                        current[0].apprentice_name,
                         current[0].mentor_name,
                         current[0].subject_name,
                         scheduled_date,
                         reprogramming_reason || 'No especificado',
-                        'MENTOR'
+                        'MENTOR',
+                        modality || current[0].modality,
+                        meeting_place || current[0].meeting_place,
+                        platform || current[0].platform,
+                        meeting_link || current[0].meeting_link
                     );
                 } else if (last_initiator_role === 'APRENDIZ') {
                     // El aprendiz reprograma -> notificar al tutor/mentor
@@ -162,10 +168,15 @@ export const updateMentorship = async (req, res) => {
                         current[0].mentor_email,
                         current[0].mentor_name,
                         current[0].apprentice_name,
+                        current[0].mentor_name,
                         current[0].subject_name,
                         scheduled_date,
                         reprogramming_reason || 'No especificado',
-                        'APRENDIZ'
+                        'APRENDIZ',
+                        modality || current[0].modality,
+                        meeting_place || current[0].meeting_place,
+                        platform || current[0].platform,
+                        meeting_link || current[0].meeting_link
                     );
                 }
             } catch (err) {
@@ -181,7 +192,12 @@ export const updateMentorship = async (req, res) => {
                     current[0].apprentice_name, 
                     current[0].mentor_name, 
                     finalStatus, 
-                    current[0].subject_name
+                    current[0].subject_name,
+                    scheduled_date || current[0].scheduled_date,
+                    modality || current[0].modality,
+                    meeting_place || current[0].meeting_place,
+                    platform || current[0].platform,
+                    meeting_link || current[0].meeting_link
                 );
             } catch(err) {
                 console.error("No se pudo enviar el correo de actualización de estado:", err);

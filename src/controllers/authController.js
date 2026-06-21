@@ -25,6 +25,11 @@ export const register = async (req, res) => {
 
     const profile_photo_url = req.file ? req.file.path : null;
 
+    // Validar que si se registra como MENTOR, esté al menos en 4to semestre
+    if (role === 'MENTOR' && parseInt(current_semester, 10) < 4) {
+        return res.status(400).json({ message: "Solo los estudiantes de 4to semestre en adelante pueden registrarse como mentores/tutores." });
+    }
+
     // Validar que el correo sea de la ESPE
     if (!email || !email.toLowerCase().endsWith('@espe.edu.ec')) {
         return res.status(400).json({ message: "El correo debe ser institucional de la ESPE (debe terminar en @espe.edu.ec)." });
