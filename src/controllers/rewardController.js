@@ -5,10 +5,11 @@ import db from '../config/db.js';
  * Canjea un cupón de recompensa, descontando espe_coins del usuario.
  */
 export const redeemCoupon = async (req, res) => {
-    const { userId, couponId, cost } = req.body;
+    const { couponId, cost } = req.body;
+    const userId = req.user.id;
 
-    if (!userId || !couponId || cost === undefined) {
-        return res.status(400).json({ error: "Faltan campos obligatorios (userId, couponId, cost)." });
+    if (!couponId || cost === undefined) {
+        return res.status(400).json({ error: "Faltan campos obligatorios (couponId, cost)." });
     }
 
     try {

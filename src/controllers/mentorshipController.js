@@ -3,7 +3,8 @@ import { sendMentorshipStatusEmail, sendMentorshipReprogramEmail } from '../serv
 import { awardXPAndCoins, checkAndAwardBadges } from '../services/gamificationService.js';
 
 export const createMentorship = async (req, res) => {
-    const { mentor_id, apprentice_id, subject_id, scheduled_date, objectives, modality, meeting_place, platform, estimated_duration } = req.body;
+    const { mentor_id, subject_id, scheduled_date, objectives, modality, meeting_place, platform, estimated_duration } = req.body;
+    const apprentice_id = req.user.role === 'ADMIN' ? (req.body.apprentice_id || req.user.id) : req.user.id;
 
     if (!mentor_id || !apprentice_id || !subject_id || !scheduled_date) {
         return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -32,7 +33,7 @@ export const createMentorship = async (req, res) => {
 };
 
 export const getMentorshipsByUser = async (req, res) => {
-    const { userId } = req.params;
+    const userId = req.user.role === 'ADMIN' ? (req.params.userId || req.user.id) : req.user.id;
     try {
         const query = `
             SELECT 
@@ -216,7 +217,7 @@ export const updateMentorship = async (req, res) => {
 };
 
 export const getNotificationCounts = async (req, res) => {
-    const { userId } = req.params;
+    const userId = req.user.role === 'ADMIN' ? (req.params.userId || req.user.id) : req.user.id;
     try {
         // Conteo para el mentor: Tutorías en estado PENDIENTE recibidas
         const [pendingMentor] = await db.query(
@@ -264,11 +265,8 @@ export const deleteMentorship = async (req, res) => {
 
 export const closeMentorship = async (req, res) => {
     const { id } = req.params;
-    const { userId, closeType, cancellationReason } = req.body;
-
-    if (!userId) {
-        return res.status(400).json({ error: "El ID del usuario es requerido" });
-    }
+    const { closeType, cancellationReason } = req.body;
+    const userId = req.user.id;
 
     try {
         // Verificar que la tutoría exista y el solicitante sea el mentor
@@ -341,7 +339,8 @@ export const closeMentorship = async (req, res) => {
 
 export const rateMentorship = async (req, res) => {
     const { id } = req.params;
-    const { rating, comment, userId } = req.body;
+    const { rating, comment } = req.body;
+    const userId = req.user.id;
 
     if (!rating || rating < 1 || rating > 5) {
         return res.status(400).json({ error: "La calificación debe ser entre 1 y 5 estrellas." });

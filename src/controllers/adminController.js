@@ -149,15 +149,26 @@ export const deleteUser = async (req, res) => {
 // 3. Solicitudes a Tutores (Tutor Applications)
 export const getApplications = async (req, res) => {
     try {
-        const query = `
+        const userId = req.user.id;
+        const userRole = req.user.role;
+
+        let query = `
             SELECT ta.id, ta.user_id, p.full_name as applicant_name, u.email as applicant_email, 
                    p.current_semester, p.career, ta.motivation, ta.selected_subjects, ta.academic_record_url, ta.status, ta.created_at
             FROM Tutor_Applications ta
             JOIN Users u ON ta.user_id = u.id
             LEFT JOIN Profiles p ON u.id = p.user_id
-            ORDER BY ta.created_at DESC
         `;
-        const [apps] = await db.query(query);
+        const queryParams = [];
+
+        if (userRole !== 'ADMIN') {
+            query += " WHERE ta.user_id = ?";
+            queryParams.push(userId);
+        }
+
+        query += " ORDER BY ta.created_at DESC";
+
+        const [apps] = await db.query(query, queryParams);
         
         // Parsear materias guardadas como JSON string en caso de que la DB lo retorne como string
         const parsedApps = apps.map(app => {
@@ -185,7 +196,8 @@ export const getApplications = async (req, res) => {
 };
 
 export const createApplication = async (req, res) => {
-    let { user_id, motivation, selected_subjects } = req.body;
+    let { motivation, selected_subjects } = req.body;
+    const user_id = req.user.id; // Enforce using the authenticated user's ID
 
     // Parsear selected_subjects si viene como string (multipart/form-data)
     if (typeof selected_subjects === 'string') {
@@ -196,7 +208,7 @@ export const createApplication = async (req, res) => {
         }
     }
 
-    if (!user_id || !motivation || !selected_subjects || selected_subjects.length === 0) {
+    if (!motivation || !selected_subjects || selected_subjects.length === 0) {
         return res.status(400).json({ error: "Todos los campos (motivación, materias) son requeridos." });
     }
 

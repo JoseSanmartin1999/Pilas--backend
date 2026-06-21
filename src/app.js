@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
 import subjectRoutes from './routes/subjectRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -12,8 +14,51 @@ import rewardRoutes from './routes/rewardRoutes.js';
 
 const app = express();
 
-app.use(cors());
+// 1. Cabeceras de seguridad con Helmet
+app.use(helmet());
+
+// 2. Configuración Restringida de CORS
+const whitelist = [
+    'http://localhost:5173',
+    'https://pilas-tutorias.web.app',
+    'https://pilas-tutorias.firebaseapp.com'
+];
+const corsOptions = {
+    origin: function (origin, callback) {
+        if (!origin || whitelist.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+            callback(null, true);
+        } else {
+            callback(new Error('Acceso denegado por políticas de CORS (Pilas! Ciberseguridad)'));
+        }
+    },
+    credentials: true
+};
+app.use(cors(corsOptions));
+
+// 3. Limitación de Tasa (Rate Limiting)
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 200,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Demasiadas solicitudes desde esta IP, por favor inténtalo de nuevo más tarde.' }
+});
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Límite de solicitudes de autenticación superado. Inténtalo de nuevo más tarde.' }
+});
+
+app.use(generalLimiter);
 app.use(express.json({ limit: '10mb' })); // Permitir payloads grandes
+
+// Aplicar limitador estricto para rutas de autenticación
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
 
 // Rutas 1
 app.use('/api/auth', authRoutes);

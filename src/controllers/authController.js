@@ -1,5 +1,6 @@
 import db from '../config/db.js';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../services/emailService.js';
 import { checkAndAwardBadges } from '../services/gamificationService.js';
 
@@ -174,9 +175,18 @@ export const login = async (req, res) => {
             console.error("Error al evaluar insignias durante login:", badgeErr.message);
         }
 
-        // Aquí idealmente generarías un token JWT. Por ahora retornamos el auth básico.
+        const jwtSecret = process.env.JWT_SECRET || 'una_clave_secreta_muy_larga_para_pilas_2026_mic';
+        const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
+        
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            jwtSecret,
+            { expiresIn: jwtExpiresIn }
+        );
+
         res.json({
             message: "Login exitoso",
+            token,
             user: {
                 id: user.id,
                 full_name: user.full_name,

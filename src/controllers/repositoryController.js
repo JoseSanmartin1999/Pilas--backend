@@ -35,7 +35,7 @@ const getUsedStorage = async (mentorshipId) => {
  */
 export const getMaterials = async (req, res) => {
     const { mentorshipId } = req.params;
-    const userId = req.query.userId;
+    const userId = req.user.id;
 
     try {
         // Verificar acceso
@@ -67,7 +67,7 @@ export const getMaterials = async (req, res) => {
  */
 export const getStorageInfo = async (req, res) => {
     const { mentorshipId } = req.params;
-    const userId = req.query.userId;
+    const userId = req.user.id;
 
     try {
         const mentorship = await verifyMentorshipAccess(mentorshipId, userId);
@@ -100,7 +100,8 @@ export const getStorageInfo = async (req, res) => {
  */
 export const uploadMaterial = async (req, res) => {
     const { mentorshipId } = req.params;
-    const { title, description, userId } = req.body;
+    const { title, description } = req.body;
+    const userId = req.user.id;
 
     if (!req.file) {
         return res.status(400).json({ error: 'No se envió ningún archivo' });
@@ -194,7 +195,8 @@ export const uploadMaterial = async (req, res) => {
  */
 export const updateMaterial = async (req, res) => {
     const { materialId } = req.params;
-    const { title, description, userId } = req.body;
+    const { title, description } = req.body;
+    const userId = req.user.id;
 
     if (!title || !title.trim()) {
         return res.status(400).json({ error: 'El título es obligatorio' });
@@ -238,7 +240,7 @@ export const updateMaterial = async (req, res) => {
  */
 export const replaceFile = async (req, res) => {
     const { materialId } = req.params;
-    const { userId } = req.body;
+    const userId = req.user.id;
 
     if (!req.file) {
         return res.status(400).json({ error: 'No se envió ningún archivo' });
@@ -333,7 +335,7 @@ export const replaceFile = async (req, res) => {
  */
 export const deleteMaterial = async (req, res) => {
     const { materialId } = req.params;
-    const { userId } = req.query;
+    const userId = req.user.id;
 
     try {
         // Obtener el material y verificar permisos
@@ -379,7 +381,7 @@ export const deleteMaterial = async (req, res) => {
  */
 export const downloadMaterial = async (req, res) => {
     const { materialId } = req.params;
-    const userId = req.query.userId;
+    const userId = req.user.id;
 
     try {
         const [materials] = await db.query(

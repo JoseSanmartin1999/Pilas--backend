@@ -6,11 +6,15 @@ import {
     uploadMaterial,
     updateMaterial,
     replaceFile,
-    deleteMaterial
+    deleteMaterial,
+    downloadMaterial
 } from '../controllers/repositoryController.js';
-import { downloadMaterial } from '../controllers/repositoryController.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+// Todas las rutas del repositorio requieren token JWT
+router.use(authenticateToken);
 
 // GET /api/repository/:mentorshipId — Listar materiales
 router.get('/:mentorshipId', getMaterials);

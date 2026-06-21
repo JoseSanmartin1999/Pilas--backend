@@ -2,9 +2,10 @@ import db from '../config/db.js';
 
 // Crear un nuevo ticket de soporte
 export const createTicket = async (req, res) => {
-    const { user_id, title, description } = req.body;
+    const { title, description } = req.body;
+    const user_id = req.user.id;
 
-    if (!user_id || !title || !description || title.trim() === '' || description.trim() === '') {
+    if (!title || !description || title.trim() === '' || description.trim() === '') {
         return res.status(400).json({ error: "Todos los campos (título, descripción) son obligatorios." });
     }
 
@@ -24,7 +25,7 @@ export const createTicket = async (req, res) => {
 
 // Obtener los tickets de un usuario específico
 export const getUserTickets = async (req, res) => {
-    const { userId } = req.params;
+    const userId = req.user.role === 'ADMIN' ? (req.params.userId || req.user.id) : req.user.id;
     try {
         const query = "SELECT * FROM Support_Tickets WHERE user_id = ? ORDER BY created_at DESC";
         const [tickets] = await db.query(query, [userId]);

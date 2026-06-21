@@ -1,21 +1,23 @@
 import express from 'express';
 import { getUserProfile, updateUserProfile, getAllMentors, upgradeToMentor, updateFeaturedBadges } from '../controllers/userController.js';
-import upload from '../middleware/upload.js'; // Middleware para procesar la imagen
+import upload from '../middleware/upload.js';
+import { authenticateToken, verifyProfileOwner } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Obtener perfil (RF#005)
-router.get('/profile/:id', getUserProfile);
+// Obtener perfil - requiere estar autenticado
+router.get('/profile/:id', authenticateToken, getUserProfile);
 
-// Actualizar perfil (RF#003) - Se usa upload.single para la imagen de perfil lo cual si se cumple
-router.put('/profile/:id', upload.single('foto_perfil'), updateUserProfile);
+// Actualizar perfil - requiere ser el propietario
+router.put('/profile/:id', authenticateToken, verifyProfileOwner, upload.single('foto_perfil'), updateUserProfile);
 
-// Destacar logros/insignias (hasta 4)
-router.put('/profile/:id/featured-badges', updateFeaturedBadges);
+// Destacar logros/insignias - requiere ser el propietario
+router.put('/profile/:id/featured-badges', authenticateToken, verifyProfileOwner, updateFeaturedBadges);
 
-// Solicitar cambio a Tutor (Ascenso de rol)
-router.put('/profile/:id/upgrade', upgradeToMentor);
+// Solicitar cambio a Tutor - requiere ser el propietario
+router.put('/profile/:id/upgrade', authenticateToken, verifyProfileOwner, upgradeToMentor);
 
-router.get('/mentors', getAllMentors);
+// Obtener todos los mentores - requiere estar autenticado
+router.get('/mentors', authenticateToken, getAllMentors);
 
 export default router;

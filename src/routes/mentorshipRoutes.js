@@ -1,30 +1,26 @@
 import express from 'express';
 import { createMentorship, getMentorshipsByUser, updateMentorship, getNotificationCounts, markAsRead, deleteMentorship, closeMentorship, rateMentorship } from '../controllers/mentorshipController.js';
+import { authenticateToken, verifyMentorshipParticipant } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// POST /api/mentorships
+// Todas las rutas de tutorías requieren token JWT
+router.use(authenticateToken);
+
+// POST /api/mentorships - Crear una tutoría
 router.post('/', createMentorship);
 
-// GET /api/mentorships/user/:userId
+// GET /api/mentorships/user/:userId - Lista de tutorías de un usuario
 router.get('/user/:userId', getMentorshipsByUser);
 
-// PUT /api/mentorships/:id/close
-router.put('/:id/close', closeMentorship);
-
-// PUT /api/mentorships/:id/rate
-router.put('/:id/rate', rateMentorship);
-
-// PUT /api/mentorships/:id
-router.put('/:id', updateMentorship);
-
-// GET /api/mentorships/counts/:userId
+// GET /api/mentorships/counts/:userId - Contador de notificaciones
 router.get('/counts/:userId', getNotificationCounts);
 
-// PATCH /api/mentorships/:id/read
-router.patch('/:id/read', markAsRead);
-
-// DELETE /api/mentorships/:id
-router.delete('/:id', deleteMentorship);
+// Rutas individuales que requieren ser participante de la tutoría
+router.put('/:id/close', verifyMentorshipParticipant, closeMentorship);
+router.put('/:id/rate', verifyMentorshipParticipant, rateMentorship);
+router.put('/:id', verifyMentorshipParticipant, updateMentorship);
+router.patch('/:id/read', verifyMentorshipParticipant, markAsRead);
+router.delete('/:id', verifyMentorshipParticipant, deleteMentorship);
 
 export default router;
