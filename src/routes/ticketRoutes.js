@@ -1,6 +1,7 @@
 import express from 'express';
 import { createTicket, getUserTickets } from '../controllers/ticketController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { validateCreateTicket } from '../middleware/validators.js';
 
 const router = express.Router();
 
@@ -8,7 +9,7 @@ const router = express.Router();
 router.use(authenticateToken);
 
 // Crear un ticket
-router.post('/', createTicket);
+router.post('/', validateCreateTicket, createTicket);
 
 // Listar tickets del propio usuario
 router.get('/user/:userId', getUserTickets);

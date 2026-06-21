@@ -2,7 +2,10 @@ import 'dotenv/config';
 import jwt from 'jsonwebtoken';
 import db from '../config/db.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'una_clave_secreta_muy_larga_para_pilas_2026_mic';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('[SECURITY] JWT_SECRET no está configurado en las variables de entorno. El servidor no puede arrancar de forma segura.');
+}
 
 /**
  * Middleware para autenticar el token JWT provisto en las cabeceras HTTP.

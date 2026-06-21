@@ -28,6 +28,15 @@ import {
     deleteSubject
 } from '../controllers/adminController.js';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware.js';
+import {
+    validateAdminUserIdParam,
+    validateUpdateUserStatus,
+    validateUpdateUserRole,
+    validateCreateBadge,
+    validateCreateCareer,
+    validateCreateSubject,
+    validateCreateApplication
+} from '../middleware/validators.js';
 
 const router = express.Router();
 
@@ -59,7 +68,7 @@ const applicationUpload = multer({
         }
     }
 });
-router.post('/tutors/applications', applicationUpload.single('academic_record'), createApplication);
+router.post('/tutors/applications', applicationUpload.single('academic_record'), validateCreateApplication, createApplication);
 
 // ==========================================
 // REQUERIR ROL DE ADMINISTRADOR A PARTIR DE AQUÍ
@@ -72,36 +81,36 @@ router.get('/report', getReportData);
 
 // Gestión de usuarios
 router.get('/users', getUsers);
-router.put('/users/:id/status', updateUserStatus);
-router.put('/users/:id/role', updateUserRole);
-router.delete('/users/:id', deleteUser);
+router.put('/users/:id/status', validateUpdateUserStatus, updateUserStatus);
+router.put('/users/:id/role', validateUpdateUserRole, updateUserRole);
+router.delete('/users/:id', validateAdminUserIdParam, deleteUser);
 
 // Gestión de carreras (además de listar)
-router.post('/careers', createCareer);
-router.put('/careers/:id', updateCareer);
-router.delete('/careers/:id', deleteCareer);
+router.post('/careers', validateCreateCareer, createCareer);
+router.put('/careers/:id', validateCreateCareer, updateCareer);
+router.delete('/careers/:id', validateAdminUserIdParam, deleteCareer);
 
 // Gestión de materias
-router.post('/subjects', createSubject);
-router.put('/subjects/:id', updateSubject);
-router.delete('/subjects/:id', deleteSubject);
+router.post('/subjects', validateCreateSubject, createSubject);
+router.put('/subjects/:id', validateCreateSubject, updateSubject);
+router.delete('/subjects/:id', validateAdminUserIdParam, deleteSubject);
 
 router.post('/careers/:id/malla', applicationUpload.single('malla_pdf'), uploadCareerMalla);
 router.get('/careers/:id/subjects', getCareerSubjects);
 
 // Aprobar/Rechazar solicitudes
-router.put('/tutors/applications/:id/approve', approveApplication);
-router.put('/tutors/applications/:id/reject', rejectApplication);
+router.put('/tutors/applications/:id/approve', validateAdminUserIdParam, approveApplication);
+router.put('/tutors/applications/:id/reject', validateAdminUserIdParam, rejectApplication);
 
 // Tickets de Soporte
 router.get('/tickets', getTickets);
-router.put('/tickets/:id/resolve', resolveTicket);
+router.put('/tickets/:id/resolve', validateAdminUserIdParam, resolveTicket);
 
 const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
 
 // Gestión de insignias (Gamificación)
-router.post('/badges', upload.single('badge_image'), createBadge);
-router.put('/badges/:id', upload.single('badge_image'), updateBadge);
-router.delete('/badges/:id', deleteBadge);
+router.post('/badges', upload.single('badge_image'), validateCreateBadge, createBadge);
+router.put('/badges/:id', upload.single('badge_image'), validateCreateBadge, updateBadge);
+router.delete('/badges/:id', validateAdminUserIdParam, deleteBadge);
 
 export default router;

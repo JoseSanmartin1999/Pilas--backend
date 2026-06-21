@@ -175,7 +175,7 @@ export const login = async (req, res) => {
             console.error("Error al evaluar insignias durante login:", badgeErr.message);
         }
 
-        const jwtSecret = process.env.JWT_SECRET || 'una_clave_secreta_muy_larga_para_pilas_2026_mic';
+        const jwtSecret = process.env.JWT_SECRET;
         const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
         
         const token = jwt.sign(

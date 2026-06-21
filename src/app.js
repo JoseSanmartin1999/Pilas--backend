@@ -53,7 +53,8 @@ const authLimiter = rateLimit({
 });
 
 app.use(generalLimiter);
-app.use(express.json({ limit: '10mb' })); // Permitir payloads grandes
+app.use(express.json({ limit: '5mb' })); // Limitar tamaño del payload para prevenir ataques de DoS
+app.use(express.urlencoded({ extended: false, limit: '5mb' })); // Parsear form data
 
 // Aplicar limitador estricto para rutas de autenticación
 app.use('/api/auth/login', authLimiter);
@@ -76,13 +77,19 @@ app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Servidor saludable' });
 });
 
+// Middleware para rutas no encontradas (404) — Evita filtración de info sobre la estructura del servidor
+app.use((req, res, next) => {
+    res.status(404).json({ error: 'Recurso no encontrado.' });
+});
+
 // Middleware Global de Errores para que siempre retorne JSON y no HTML (Ej. cuando falla un middleware o DB)
 app.use((err, req, res, next) => {
-    console.error("Error global interceptado:", err);
+    console.error("Error global interceptado:", err.message);
+    // En producción, NO exponer detalles del error para evitar filtración de información
     res.status(err.status || 500).json({
-        message: "Error interno del servidor",
-        error: err.message || "Error desconocido",
-        detalles: process.env.NODE_ENV === 'development' ? err : undefined
+        error: process.env.NODE_ENV === 'production'
+            ? 'Error interno del servidor.'
+            : (err.message || 'Error desconocido')
     });
 });
 
