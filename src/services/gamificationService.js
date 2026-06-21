@@ -252,7 +252,7 @@ export const getTopMentors = async () => {
 /**
  * Actualiza el conteo de inicios de sesion consecutivos (login_streak).
  * - Si el ultimo login fue ayer, incrementa streak
- * - Si fue hoy, no cambia (ya se cont�)
+ * - Si fue hoy, no cambia (ya se cont�)
  * - Si fue hace 2+ dias, reinicia streak a 1
  */
 export const updateLoginStreak = async (userId) => {
@@ -260,17 +260,34 @@ export const updateLoginStreak = async (userId) => {
         await ensureStreakColumns();
         const [rows] = await db.query('SELECT login_streak, last_login_date FROM Profiles WHERE user_id = ?', [userId]);
         if (rows.length === 0) return;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const lastLoginDate = rows[0].last_login_date ? new Date(rows[0].last_login_date) : null;
+        
+        // Obtener el string YYYY-MM-DD en America/Guayaquil (-05:00) para hoy
+        const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+        
+        let lastLoginStr = null;
+        if (rows[0].last_login_date) {
+            const lld = rows[0].last_login_date;
+            if (lld instanceof Date) {
+                lastLoginStr = lld.toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+            } else {
+                lastLoginStr = String(lld).split('T')[0];
+            }
+        }
+        
         const currentStreak = rows[0].login_streak || 0;
         let newStreak = 1;
-        if (lastLoginDate) {
-            const diffDays = Math.round((today - lastLoginDate) / (1000 * 60 * 60 * 24));
-            if (diffDays === 0) return;
-            if (diffDays === 1) newStreak = currentStreak + 1;
+        
+        if (lastLoginStr) {
+            const dateToday = new Date(todayStr + 'T00:00:00Z');
+            const dateLast = new Date(lastLoginStr + 'T00:00:00Z');
+            const diffDays = Math.round((dateToday - dateLast) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 0) return; // Ya se inició sesión hoy, no cambia el streak
+            if (diffDays === 1) {
+                newStreak = currentStreak + 1; // Login consecutivo al día siguiente
+            }
         }
-        const todayStr = today.toISOString().split('T')[0];
+        
         await db.query('UPDATE Profiles SET login_streak = ?, last_login_date = ? WHERE user_id = ?', [newStreak, todayStr, userId]);
     } catch (err) {
         console.error('Error actualizando login streak para usuario ' + userId + ':', err.message);
