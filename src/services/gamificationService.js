@@ -3,6 +3,25 @@ import db from '../config/db.js';
 import redis from '../config/redis.js';
 
 /**
+ * Migración segura: asegura que existan las columnas necesarias en Profiles.
+ * Se ejecuta en el primer checkAndAwardBadges si no existen.
+ */
+let columnsMigrated = false;
+const ensureStreakColumns = async () => {
+    if (columnsMigrated) return;
+    try {
+        await db.query(`ALTER TABLE Profiles ADD COLUMN IF NOT EXISTS login_streak INT DEFAULT 0`);
+        await db.query(`ALTER TABLE Profiles ADD COLUMN IF NOT EXISTS last_login_date DATE DEFAULT NULL`);
+        columnsMigrated = true;
+    } catch (err) {
+        // TiDB puede no soportar IF NOT EXISTS, usamos try/catch por columna
+        try { await db.query(`ALTER TABLE Profiles ADD COLUMN login_streak INT DEFAULT 0`); } catch (_) {}
+        try { await db.query(`ALTER TABLE Profiles ADD COLUMN last_login_date DATE DEFAULT NULL`); } catch (_) {}
+        columnsMigrated = true;
+    }
+};
+
+/**
  * Otorga XP y ESPE-Coins a un usuario, calcula si sube de nivel y actualiza el Leaderboard.
  */
 export const awardXPAndCoins = async (userId, xpAmount, coinsAmount) => {
@@ -59,6 +78,8 @@ export const awardXPAndCoins = async (userId, xpAmount, coinsAmount) => {
  */
 export const checkAndAwardBadges = async (userId) => {
     try {
+        await ensureStreakColumns();
+
         // 1. Obtener estadísticas del usuario en la base de datos
         
         // Tutorías completadas como mentor
@@ -85,11 +106,19 @@ export const checkAndAwardBadges = async (userId) => {
         );
         const totalPerfect = perfectRows[0].count;
 
-        // Obtener datos del usuario
-        const [userRows] = await db.query("SELECT xp, bio, profile_photo_url FROM Profiles WHERE user_id = ?", [userId]);
+        // Tutorías con calificación alta (4 o 5 estrellas) como mentor — para high_rating_streak
+        const [highRatingRows] = await db.query(
+            "SELECT COUNT(*) as count FROM Mentorships WHERE mentor_id = ? AND status = 'COMPLETADA' AND rating >= 4 AND is_deleted = 0",
+            [userId]
+        );
+        const totalHighRating = highRatingRows[0].count;
+
+        // Obtener datos del usuario incluyendo login_streak
+        const [userRows] = await db.query("SELECT xp, bio, profile_photo_url, login_streak FROM Profiles WHERE user_id = ?", [userId]);
         if (userRows.length === 0) return [];
         const user = userRows[0];
         const currentXp = user.xp || 0;
+        const currentLoginStreak = user.login_streak || 0;
 
         // Criterio de perfil configurado: tiene al menos biografía establecida
         const profileConfigured = (user.bio && user.bio.trim() !== '') ? 1 : 0;
@@ -101,7 +130,9 @@ export const checkAndAwardBadges = async (userId) => {
             perfect_ratings: totalPerfect,
             xp_earned: currentXp,
             first_login: 1,
-            profile_configured: profileConfigured
+            profile_configured: profileConfigured,
+            consecutive_logins: currentLoginStreak,   // Días seguidos de inicio de sesión
+            high_rating_streak: totalHighRating        // Tutorías con calificación ≥4★
         };
 
         // 2. Obtener todas las insignias del catálogo
@@ -217,4 +248,31 @@ export const getTopMentors = async () => {
         LIMIT 10
     `);
     return dbRows;
+};
+/**
+ * Actualiza el conteo de inicios de sesion consecutivos (login_streak).
+ * - Si el ultimo login fue ayer, incrementa streak
+ * - Si fue hoy, no cambia (ya se cont�)
+ * - Si fue hace 2+ dias, reinicia streak a 1
+ */
+export const updateLoginStreak = async (userId) => {
+    try {
+        await ensureStreakColumns();
+        const [rows] = await db.query('SELECT login_streak, last_login_date FROM Profiles WHERE user_id = ?', [userId]);
+        if (rows.length === 0) return;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const lastLoginDate = rows[0].last_login_date ? new Date(rows[0].last_login_date) : null;
+        const currentStreak = rows[0].login_streak || 0;
+        let newStreak = 1;
+        if (lastLoginDate) {
+            const diffDays = Math.round((today - lastLoginDate) / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) return;
+            if (diffDays === 1) newStreak = currentStreak + 1;
+        }
+        const todayStr = today.toISOString().split('T')[0];
+        await db.query('UPDATE Profiles SET login_streak = ?, last_login_date = ? WHERE user_id = ?', [newStreak, todayStr, userId]);
+    } catch (err) {
+        console.error('Error actualizando login streak para usuario ' + userId + ':', err.message);
+    }
 };

@@ -2,7 +2,7 @@ import db from '../config/db.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../services/emailService.js';
-import { checkAndAwardBadges } from '../services/gamificationService.js';
+import { checkAndAwardBadges, updateLoginStreak } from '../services/gamificationService.js';
 
 export const register = async (req, res) => {
     const {
@@ -166,6 +166,13 @@ export const login = async (req, res) => {
 
         if (!isMatch) {
             return res.status(401).json({ message: "Credenciales incorrectas" });
+        }
+
+        // Actualizar streak de logins consecutivos
+        try {
+            await updateLoginStreak(user.id);
+        } catch (streakErr) {
+            console.error("Error actualizando login streak:", streakErr.message);
         }
 
         // Evaluar logros en login (ej. primera vez que inicia sesión)
