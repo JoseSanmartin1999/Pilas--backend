@@ -113,8 +113,13 @@ export const checkAndAwardBadges = async (userId) => {
         );
         const totalHighRating = highRatingRows[0].count;
 
-        // Obtener datos del usuario incluyendo login_streak
-        const [userRows] = await db.query("SELECT xp, bio, profile_photo_url, login_streak FROM Profiles WHERE user_id = ?", [userId]);
+        // Obtener datos del usuario incluyendo login_streak y fecha de registro
+        const [userRows] = await db.query(`
+            SELECT p.xp, p.bio, p.profile_photo_url, p.login_streak, u.created_at 
+            FROM Profiles p 
+            JOIN Users u ON p.user_id = u.id 
+            WHERE p.user_id = ?
+        `, [userId]);
         if (userRows.length === 0) return [];
         const user = userRows[0];
         const currentXp = user.xp || 0;
@@ -122,6 +127,15 @@ export const checkAndAwardBadges = async (userId) => {
 
         // Criterio de perfil configurado: tiene al menos biografía establecida
         const profileConfigured = (user.bio && user.bio.trim() !== '') ? 1 : 0;
+
+        // Validar si el registro fue en Junio 2026 (mes 5 en JS Date, año 2026)
+        let isEarlyAdopter = 0;
+        if (user.created_at) {
+            const createdDate = new Date(user.created_at);
+            if (createdDate.getFullYear() === 2026 && createdDate.getMonth() === 5) {
+                isEarlyAdopter = 1;
+            }
+        }
 
         const stats = {
             mentorships_given: totalGiven,
@@ -132,7 +146,8 @@ export const checkAndAwardBadges = async (userId) => {
             first_login: 1,
             profile_configured: profileConfigured,
             consecutive_logins: currentLoginStreak,   // Días seguidos de inicio de sesión
-            high_rating_streak: totalHighRating        // Tutorías con calificación ≥4★
+            high_rating_streak: totalHighRating,       // Tutorías con calificación ≥4★
+            early_adopter: isEarlyAdopter              // Registro en el mes de lanzamiento (Junio 2026)
         };
 
         // 2. Obtener todas las insignias del catálogo
