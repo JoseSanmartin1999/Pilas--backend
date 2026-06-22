@@ -12,7 +12,12 @@ if (!JWT_SECRET) {
  */
 export const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer <TOKEN>
+    let token = authHeader && authHeader.split(' ')[1]; // Bearer <TOKEN>
+
+    // Fallback a parámetro de consulta para descargas directas de archivos
+    if (!token && req.query.token) {
+        token = req.query.token;
+    }
 
     if (!token) {
         return res.status(401).json({ error: 'Acceso denegado. No se proporcionó token de autenticación.' });
