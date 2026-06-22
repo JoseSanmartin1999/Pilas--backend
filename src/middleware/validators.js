@@ -64,6 +64,7 @@ export const validateRegister = [
         .trim()
         .notEmpty().withMessage('El nombre completo es requerido.')
         .isLength({ max: 150 }).withMessage('Nombre demasiado largo.')
+        .matches(/^[a-zA-ZñÑáéíóúÁÉÍÓÚüÜ\s]+$/).withMessage('El nombre completo solo puede contener letras, espacios y la letra ñ.')
         .escape()
         .custom(noSQLInjection),
 
@@ -184,6 +185,7 @@ export const validateUpdateProfile = [
         .optional()
         .trim()
         .isLength({ max: 150 }).withMessage('Nombre demasiado largo.')
+        .matches(/^[a-zA-ZñÑáéíóúÁÉÍÓÚüÜ\s]+$/).withMessage('El nombre completo solo puede contener letras, espacios y la letra ñ.')
         .escape()
         .custom(noSQLInjection),
 
@@ -226,10 +228,10 @@ export const validateFeaturedBadges = [
     param('id')
         .isInt({ min: 1 }).withMessage('ID de usuario inválido.'),
 
-    body('featured_badges')
-        .isArray({ max: 5 }).withMessage('Máximo 5 insignias destacadas.'),
+    body('badgeIds')
+        .isArray({ max: 4 }).withMessage('Solo puedes destacar hasta 4 logros/insignias.'),
 
-    body('featured_badges.*')
+    body('badgeIds.*')
         .isInt({ min: 1 }).withMessage('ID de insignia inválido.'),
 
     handleValidationErrors
