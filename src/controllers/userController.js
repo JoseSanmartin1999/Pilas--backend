@@ -290,7 +290,7 @@ export const getAllMentors = async (req, res) => {
             JOIN Roles r ON ur.role_id = r.id
             LEFT JOIN Mentor_Subjects ms ON u.id = ms.mentor_id
             LEFT JOIN Subjects s ON ms.subject_id = s.id
-            WHERE r.name = 'MENTOR'
+            WHERE r.name = 'MENTOR' AND u.status = 'ACTIVO'
         `;
         const queryParams = [];
 
