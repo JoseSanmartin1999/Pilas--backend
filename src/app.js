@@ -84,10 +84,17 @@ app.use((req, res, next) => {
 
 // Middleware Global de Errores para que siempre retorne JSON y no HTML (Ej. cuando falla un middleware o DB)
 app.use((err, req, res, next) => {
-    console.error("Error global interceptado:", err.message);
-    // En producción, NO exponer detalles del error para evitar filtración de información
-    res.status(err.status || 500).json({
-        error: process.env.NODE_ENV === 'production'
+    const statusCode = err.statusCode || (typeof err.status === 'number' ? err.status : 500);
+    
+    if (statusCode === 500 || !err.isOperational) {
+        console.error("Error global interceptado:", err);
+    } else {
+        console.warn(`[${statusCode}] Error operacional:`, err.message);
+    }
+
+    // En producción, NO exponer detalles del error interno de servidor para evitar filtración de información
+    res.status(statusCode).json({
+        error: (process.env.NODE_ENV === 'production' && statusCode === 500)
             ? 'Error interno del servidor.'
             : (err.message || 'Error desconocido')
     });

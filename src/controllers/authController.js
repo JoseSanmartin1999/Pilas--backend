@@ -143,7 +143,7 @@ export const login = async (req, res) => {
             WHERE u.email = ?
         `, [email]);
         if (users.length === 0) {
-            return res.status(401).json({ message: "Credenciales incorrectas" });
+            return res.status(404).json({ message: "Usuario no encontrado" });
         }
 
         const user = users[0];
