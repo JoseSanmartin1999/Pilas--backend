@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../services/emailService.js';
 import { checkAndAwardBadges, updateLoginStreak } from '../services/gamificationService.js';
+import { ensureWelcomeMessages } from '../services/notificationService.js';
 
 export const register = async (req, res) => {
     const {
@@ -180,6 +181,13 @@ export const login = async (req, res) => {
             await checkAndAwardBadges(user.id);
         } catch (badgeErr) {
             console.error("Error al evaluar insignias durante login:", badgeErr.message);
+        }
+
+        // Asegurar mensajes de bienvenida y encuesta de tesis en la bandeja de entrada
+        try {
+            await ensureWelcomeMessages(user.id);
+        } catch (welcomeErr) {
+            console.error("Error al asegurar mensajes de bienvenida:", welcomeErr.message);
         }
 
         const jwtSecret = process.env.JWT_SECRET;

@@ -994,4 +994,122 @@ export const deleteSubject = async (req, res) => {
     }
 };
 
+// ==========================================
+// GESTIÓN DE RECOMPENSAS Y COINS (ESPE-COINS)
+// ==========================================
+
+// 1. Obtener todas las recompensas (activas e inactivas) para el administrador
+export const getRewardsAdmin = async (req, res) => {
+    try {
+        const [rows] = await db.query("SELECT * FROM Rewards ORDER BY created_at DESC");
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al obtener recompensas (admin):", error);
+        res.status(500).json({ error: "Error al cargar recompensas" });
+    }
+};
+
+// 2. Crear una recompensa
+export const createReward = async (req, res) => {
+    const { title, description, cost, is_active, is_special } = req.body;
+
+    if (!title || !description || cost === undefined) {
+        return res.status(400).json({ error: "Faltan campos obligatorios (title, description, cost)." });
+    }
+
+    try {
+        const [result] = await db.query(
+            "INSERT INTO Rewards (title, description, cost, is_active, is_special) VALUES (?, ?, ?, ?, ?)",
+            [title, description, cost, is_active !== undefined ? is_active : 1, is_special !== undefined ? is_special : 0]
+        );
+        const newId = result.insertId;
+        res.status(201).json({
+            id: newId,
+            title,
+            description,
+            cost,
+            is_active: is_active !== undefined ? is_active : 1,
+            is_special: is_special !== undefined ? is_special : 0,
+            message: "Recompensa creada con éxito."
+        });
+    } catch (error) {
+        console.error("Error al crear recompensa:", error);
+        res.status(500).json({ error: "Error al crear recompensa" });
+    }
+};
+
+// 3. Actualizar una recompensa
+export const updateReward = async (req, res) => {
+    const { id } = req.params;
+    const { title, description, cost, is_active, is_special } = req.body;
+
+    if (!title || !description || cost === undefined) {
+        return res.status(400).json({ error: "Faltan campos obligatorios (title, description, cost)." });
+    }
+
+    try {
+        const [result] = await db.query(
+            "UPDATE Rewards SET title = ?, description = ?, cost = ?, is_active = ?, is_special = ? WHERE id = ?",
+            [title, description, cost, is_active !== undefined ? is_active : 1, is_special !== undefined ? is_special : 0, id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Recompensa no encontrada." });
+        }
+
+        res.json({
+            id,
+            title,
+            description,
+            cost,
+            is_active: is_active !== undefined ? is_active : 1,
+            is_special: is_special !== undefined ? is_special : 0,
+            message: "Recompensa actualizada con éxito."
+        });
+    } catch (error) {
+        console.error("Error al actualizar recompensa:", error);
+        res.status(500).json({ error: "Error al actualizar recompensa" });
+    }
+};
+
+// 4. Eliminar una recompensa
+export const deleteReward = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const [result] = await db.query("DELETE FROM Rewards WHERE id = ?", [id]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: "Recompensa no encontrada." });
+        }
+
+        res.json({ message: "Recompensa eliminada con éxito." });
+    } catch (error) {
+        console.error("Error al eliminar recompensa:", error);
+        res.status(500).json({ error: "No se pudo eliminar la recompensa debido a un conflicto de integridad." });
+    }
+};
+
+// 5. Obtener reclamaciones de recompensas activas
+export const getRewardClaims = async (req, res) => {
+    try {
+        const query = `
+            SELECT ur.id, ur.reward_id, ur.claimed_at, ur.selected_option, ur.contact_phone,
+                   r.title as reward_title, r.cost as reward_cost,
+                   p.full_name as user_name, u.email as user_email
+            FROM User_Rewards ur
+            JOIN Users u ON ur.user_id = u.id
+            JOIN Profiles p ON u.id = p.user_id
+            JOIN Rewards r ON ur.reward_id = r.id
+            ORDER BY ur.claimed_at DESC
+        `;
+        const [rows] = await db.query(query);
+        res.json(rows);
+    } catch (error) {
+        console.error("Error al obtener reclamaciones de recompensas:", error);
+        res.status(500).json({ error: "Error al cargar reclamaciones" });
+    }
+};
+
+
 

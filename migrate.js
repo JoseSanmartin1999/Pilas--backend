@@ -31,7 +31,9 @@ const MIGRATIONS = [
     { query: 'ALTER TABLE Badges ADD COLUMN coins_reward INT DEFAULT 0;', column: 'coins_reward' },
     { query: 'ALTER TABLE Tutor_Applications ADD COLUMN academic_record_url VARCHAR(500) DEFAULT NULL;', column: 'academic_record_url' },
     { query: 'ALTER TABLE Mentorships ADD COLUMN reminder_2h_sent TINYINT(1) DEFAULT 0;', column: 'reminder_2h_sent' },
-    { query: 'ALTER TABLE Mentorships ADD COLUMN reminder_10m_sent TINYINT(1) DEFAULT 0;', column: 'reminder_10m_sent' }
+    { query: 'ALTER TABLE Mentorships ADD COLUMN reminder_10m_sent TINYINT(1) DEFAULT 0;', column: 'reminder_10m_sent' },
+    { query: 'ALTER TABLE Profiles ADD COLUMN survey_completed TINYINT(1) DEFAULT 0;', column: 'survey_completed' },
+    { query: 'ALTER TABLE Profiles ADD COLUMN first_login_rewarded TINYINT(1) DEFAULT 0;', column: 'first_login_rewarded' }
 ];
 
 async function executeMigrations() {
@@ -150,6 +152,69 @@ async function executeMigrations() {
         }
     } catch (error) {
         console.error("[ERROR] Error al sembrar insignias por defecto:", error.message);
+    }
+
+    // 5. Sembrar recompensas iniciales si la tabla Rewards está vacía
+    try {
+        const [rewards] = await db.query("SELECT * FROM Rewards");
+        if (rewards.length === 0) {
+            const INITIAL_REWARDS = [
+                {
+                    title: 'Boleto de Sorteo: Kit Gamer o Tarjeta Steam $10',
+                    description: 'Participa en el sorteo de un Kit Gamer Mouse + Teclado Gamer o para una tarjeta de regalo de $10 en STEAM. Para poder reclamarlo deberás iniciar sesión por primera vez, crear o participar en una tutoría y llenar la encuesta.',
+                    cost: 100,
+                    is_active: 1,
+                    is_special: 1
+                },
+                {
+                    title: '15% Descuento en Bar ESPE',
+                    description: 'Aplica en tu próximo consumo de desayunos o snacks en el bar central del campus.',
+                    cost: 60,
+                    is_active: 1,
+                    is_special: 0
+                },
+                {
+                    title: 'Almuerzo Gratis Comedor',
+                    description: 'Canjea este cupón por un almuerzo completo gratuito en el comedor universitario.',
+                    cost: 150,
+                    is_active: 1,
+                    is_special: 0
+                },
+                {
+                    title: 'Parqueadero VIP (1 Día)',
+                    description: 'Acceso reservado a la zona de parqueaderos preferencial por un día completo.',
+                    cost: 100,
+                    is_active: 1,
+                    is_special: 0
+                },
+                {
+                    title: 'Termo Oficial ESPE',
+                    description: 'Termo metálico premium con el logo grabado de la ESPE. Retirar en Bienestar Estudiantil.',
+                    cost: 200,
+                    is_active: 1,
+                    is_special: 0
+                },
+                {
+                    title: 'Cuaderno Anillado Pilas!',
+                    description: 'Cuaderno exclusivo de apuntes con stickers personalizados de la plataforma.',
+                    cost: 80,
+                    is_active: 1,
+                    is_special: 0
+                }
+            ];
+
+            for (const reward of INITIAL_REWARDS) {
+                await db.query(
+                    `INSERT INTO Rewards (title, description, cost, is_active, is_special) VALUES (?, ?, ?, ?, ?)`,
+                    [reward.title, reward.description, reward.cost, reward.is_active, reward.is_special]
+                );
+            }
+            console.log("[EXITO] Recompensas iniciales sembradas correctamente.");
+        } else {
+            console.log("[INFO] Ya existen recompensas en la base de datos, omitiendo siembra.");
+        }
+    } catch (error) {
+        console.error("[ERROR] Error al sembrar recompensas por defecto:", error.message);
     }
 
     console.log("Verificación de esquema finalizada.");

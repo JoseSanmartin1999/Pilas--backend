@@ -80,6 +80,26 @@ export const checkAndAwardBadges = async (userId) => {
     try {
         await ensureStreakColumns();
 
+        // Bono ESPE-Coins por primer login / perfil completo
+        try {
+            const [profileInfo] = await db.query(
+                "SELECT first_login_rewarded, full_name, career, student_id FROM Profiles WHERE user_id = ?",
+                [userId]
+            );
+            if (profileInfo.length > 0) {
+                const p = profileInfo[0];
+                if (!p.first_login_rewarded && p.full_name && p.career && p.student_id) {
+                    await db.query(
+                        "UPDATE Profiles SET espe_coins = espe_coins + 100, first_login_rewarded = 1 WHERE user_id = ?",
+                        [userId]
+                    );
+                    console.log(`[BONO] Otorgado bono de 100 ESPE-Coins al usuario ${userId} por perfil completo.`);
+                }
+            }
+        } catch (bonoErr) {
+            console.error("Error al otorgar bono de perfil completo:", bonoErr.message);
+        }
+
         // 1. Obtener estadísticas del usuario en la base de datos
         
         // Tutorías completadas como mentor

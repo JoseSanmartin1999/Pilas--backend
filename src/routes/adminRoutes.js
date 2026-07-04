@@ -25,7 +25,12 @@ import {
     getCareerSubjects,
     createSubject,
     updateSubject,
-    deleteSubject
+    deleteSubject,
+    getRewardsAdmin,
+    createReward,
+    updateReward,
+    deleteReward,
+    getRewardClaims
 } from '../controllers/adminController.js';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware.js';
 import {
@@ -112,5 +117,12 @@ const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
 router.post('/badges', upload.single('badge_image'), validateCreateBadge, createBadge);
 router.put('/badges/:id', upload.single('badge_image'), validateCreateBadge, updateBadge);
 router.delete('/badges/:id', validateAdminUserIdParam, deleteBadge);
+
+// Gestión de Recompensas (ESPE-Coins)
+router.get('/rewards', getRewardsAdmin);
+router.post('/rewards', createReward);
+router.put('/rewards/:id', updateReward);
+router.delete('/rewards/:id', deleteReward);
+router.get('/rewards/claims', getRewardClaims);
 
 export default router;
