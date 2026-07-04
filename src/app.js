@@ -14,6 +14,9 @@ import rewardRoutes from './routes/rewardRoutes.js';
 
 const app = express();
 
+// Confiar en los proxies inversos (Render/Cloudflare) para registrar la IP del cliente real en rate-limiting
+app.set('trust proxy', 1);
+
 // 1. Cabeceras de seguridad con Helmet
 app.use(helmet());
 
