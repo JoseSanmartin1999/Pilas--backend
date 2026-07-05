@@ -12,13 +12,9 @@ export const getSubjectsBySemester = async (req, res, next) => {
             const career = await subjectRepository.findCareerByName(career_name);
             if (career) {
                 matchedCareerId = career.id;
-            } else {
-                // Fallback: Si no se encuentra carrera por el nombre, usar la primera carrera por defecto (ej. Ingeniería de Software)
-                const defaultCareer = await subjectRepository.findDefaultCareer();
-                if (defaultCareer) {
-                    matchedCareerId = defaultCareer.id;
-                }
             }
+            // No fallback: if career is not found, return empty array rather than
+            // accidentally returning subjects from a wrong or default career.
         }
 
         const rows = await subjectRepository.getSubjectsBySemesterAndCareer(semester, matchedCareerId);
@@ -26,4 +22,4 @@ export const getSubjectsBySemester = async (req, res, next) => {
     } catch (error) {
         next(error);
     }
-};
+};

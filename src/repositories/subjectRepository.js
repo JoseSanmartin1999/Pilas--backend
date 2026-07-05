@@ -3,8 +3,11 @@ import db from '../config/db.js';
 
 export const findCareerByName = async (name) => {
     const [rows] = await db.query(
-        "SELECT id FROM Careers WHERE name = ? OR name LIKE ? OR ? LIKE CONCAT('%', name, '%') LIMIT 1",
-        [name, `%${name}%`, name]
+        // name = ?          → exact match (e.g. 'Ingeniería de Software')
+        // name LIKE ?        → DB name contains input keyword (e.g. DB has 'Ingeniería de Software', input is '%Software%')
+        // ? LIKE CONCAT(...)  REMOVED — it was backwards: checked if short input contained the long DB name (never true)
+        "SELECT id FROM Careers WHERE name = ? OR name LIKE ? LIMIT 1",
+        [name, `%${name}%`]
     );
     return rows.length > 0 ? rows[0] : null;
 };
