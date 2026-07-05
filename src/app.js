@@ -24,7 +24,8 @@ app.use(helmet());
 const whitelist = [
     'http://localhost:5173',
     'https://pilas-tutorias.web.app',
-    'https://pilas-tutorias.firebaseapp.com'
+    'https://pilas-tutorias.firebaseapp.com',
+    'https://pilas-frontend.vercel.app'
 ];
 const corsOptions = {
     origin: function (origin, callback) {
