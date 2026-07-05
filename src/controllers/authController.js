@@ -15,6 +15,18 @@ export const register = async (req, res) => {
         bio = null
     } = req.body;
 
+    // Resolve career_id from the career name (for reliable subject filtering)
+    let career_id = null;
+    if (career) {
+        try {
+            const [careerRows] = await db.query(
+                "SELECT id FROM Careers WHERE name = ? OR name LIKE ? LIMIT 1",
+                [career, `%${career}%`]
+            );
+            if (careerRows.length > 0) career_id = careerRows[0].id;
+        } catch (e) { /* non-critical, career_id will remain null */ }
+    }
+
     let { selectedSubjects = [] } = req.body;
     // Multipart form data envia arrays como strings, hay que parsearlos si vienen como string
     if (typeof selectedSubjects === 'string') {
@@ -76,15 +88,16 @@ export const register = async (req, res) => {
             [userId, roleId]
         );
 
-        // 2c. Insertar Perfil del Usuario
+        // 2c. Insertar Perfil del Usuario (incluye career_id para filtrado confiable de materias)
         await connection.query(
             `INSERT INTO Profiles (
-                user_id, full_name, profile_photo_url, bio, 
-                institution, career, student_id, current_semester
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                user_id, full_name, profile_photo_url, bio,
+                institution, career, career_id, student_id, current_semester
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 userId, full_name, profile_photo_url, bio,
-                institution || 'ESPE', career || null, student_id || null, current_semester || 1
+                institution || 'ESPE', career || null, career_id,
+                student_id || null, current_semester || 1
             ]
         );
 

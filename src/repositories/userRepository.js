@@ -4,7 +4,7 @@ import db from '../config/db.js';
 export const findUserById = async (userId) => {
     const [users] = await db.query(`
         SELECT u.id, u.email, u.status, u.created_at,
-               p.full_name, p.profile_photo_url, p.bio, p.institution, p.career, p.student_id, p.current_semester, p.xp, p.level, p.espe_coins,
+               p.full_name, p.profile_photo_url, p.bio, p.institution, p.career, p.career_id, p.student_id, p.current_semester, p.xp, p.level, p.espe_coins,
                (SELECT r.name FROM Roles r JOIN User_Roles ur ON r.id = ur.role_id WHERE ur.user_id = u.id LIMIT 1) AS role
         FROM Users u
         LEFT JOIN Profiles p ON u.id = p.user_id
@@ -12,6 +12,7 @@ export const findUserById = async (userId) => {
     `, [userId]);
     return users.length > 0 ? users[0] : null;
 };
+
 
 export const getSubjectsByMentorId = async (mentorId) => {
     const query = `
