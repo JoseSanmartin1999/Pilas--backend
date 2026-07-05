@@ -148,11 +148,12 @@ export const checkAndAwardBadges = async (userId) => {
         // Criterio de perfil configurado: tiene al menos biografía establecida
         const profileConfigured = (user.bio && user.bio.trim() !== '') ? 1 : 0;
 
-        // Validar si el registro fue en Junio 2026 (mes 5 en JS Date, año 2026)
+        // Validar si el registro fue hasta el 25 de Julio de 2026 (Pilas! antes que todos)
         let isEarlyAdopter = 0;
         if (user.created_at) {
             const createdDate = new Date(user.created_at);
-            if (createdDate.getFullYear() === 2026 && createdDate.getMonth() === 5) {
+            const limitDate = new Date('2026-07-25T23:59:59.999Z');
+            if (createdDate <= limitDate) {
                 isEarlyAdopter = 1;
             }
         }
@@ -167,7 +168,7 @@ export const checkAndAwardBadges = async (userId) => {
             profile_configured: profileConfigured,
             consecutive_logins: currentLoginStreak,   // Días seguidos de inicio de sesión
             high_rating_streak: totalHighRating,       // Tutorías con calificación ≥4★
-            early_adopter: isEarlyAdopter              // Registro en el mes de lanzamiento (Junio 2026)
+            early_adopter: isEarlyAdopter              // Registro hasta el 25 de Julio de 2026
         };
 
         // 2. Obtener todas las insignias del catálogo
