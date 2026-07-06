@@ -30,6 +30,7 @@ async function sendRemindersForWindow(intervalLabel, intervalMs, flagColumn) {
             WHERE m.status = 'ACEPTADA'
               AND m.${flagColumn} = 0
               AND m.is_deleted = 0
+              AND s.name != 'Pilas! Comunidad'
               AND m.scheduled_date BETWEEN ? AND ?
         `;
         const [mentorships] = await db.query(query, [startTime, endTime]);
