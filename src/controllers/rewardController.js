@@ -21,7 +21,12 @@ export const getRewardsStatus = async (req, res, next) => {
 
         // b. Crear o participar de una tutoría (mentor_id o apprentice_id)
         const [mentorships] = await db.query(
-            "SELECT COUNT(*) as count FROM Mentorships WHERE (mentor_id = ? OR apprentice_id = ?) AND is_deleted = 0",
+            `SELECT COUNT(*) as count 
+             FROM Mentorships m
+             JOIN Subjects s ON m.subject_id = s.id
+             WHERE (m.mentor_id = ? OR m.apprentice_id = ?) 
+               AND m.is_deleted = 0 
+               AND s.name != 'Pilas! Comunidad'`,
             [userId, userId]
         );
         const hasTutoring = mentorships[0].count > 0;
@@ -106,7 +111,12 @@ export const claimReward = async (req, res, next) => {
         if (reward.is_special) {
             // Verificar tutoría
             const [mentorships] = await db.query(
-                "SELECT COUNT(*) as count FROM Mentorships WHERE (mentor_id = ? OR apprentice_id = ?) AND is_deleted = 0",
+                `SELECT COUNT(*) as count 
+                 FROM Mentorships m
+                 JOIN Subjects s ON m.subject_id = s.id
+                 WHERE (m.mentor_id = ? OR m.apprentice_id = ?) 
+                   AND m.is_deleted = 0 
+                   AND s.name != 'Pilas! Comunidad'`,
                 [userId, userId]
             );
             if (mentorships[0].count === 0) {

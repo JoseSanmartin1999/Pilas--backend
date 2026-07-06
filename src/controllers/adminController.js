@@ -1111,5 +1111,66 @@ export const getRewardClaims = async (req, res) => {
     }
 };
 
+// 6. Enviar mensaje global a todos los usuarios activos
+export const broadcastMessage = async (req, res) => {
+    const { message } = req.body;
+    const adminId = req.user.id;
 
+    if (!message || !message.trim()) {
+        return res.status(400).json({ error: "El mensaje no puede estar vacío." });
+    }
 
+    try {
+        // 1. Obtener todos los usuarios activos
+        const [activeUsers] = await db.query(
+            "SELECT id FROM Users WHERE status = 'ACTIVO' AND id != ?",
+            [adminId]
+        );
+
+        if (activeUsers.length === 0) {
+            return res.json({ message: "No hay usuarios activos registrados para enviar el mensaje." });
+        }
+
+        // 2. Obtener o crear la materia de la comunidad "Pilas! Comunidad"
+        let subjectId;
+        const [existing] = await db.query("SELECT id FROM Subjects WHERE name = 'Pilas! Comunidad' LIMIT 1");
+        if (existing.length > 0) {
+            subjectId = existing[0].id;
+        } else {
+            const [careers] = await db.query("SELECT id FROM Careers LIMIT 1");
+            const careerId = careers.length > 0 ? careers[0].id : 1;
+            const [result] = await db.query(
+                "INSERT INTO Subjects (name, semester, code, career_id) VALUES ('Pilas! Comunidad', 1, 'PILAS-COM', ?)",
+                [careerId]
+            );
+            subjectId = result.insertId;
+        }
+
+        // 3. Crear una tutoría con estado ACEPTADA para cada usuario activo
+        const connection = await db.getConnection();
+        try {
+            await connection.beginTransaction();
+
+            for (const user of activeUsers) {
+                await connection.query(
+                    `INSERT INTO Mentorships (
+                        mentor_id, apprentice_id, subject_id, scheduled_date, objectives, 
+                        status, modality, meeting_place, platform, estimated_duration, apprentice_notified
+                    ) VALUES (?, ?, ?, NOW(), ?, 'ACEPTADA', 'Online', 'Mensaje de la Administración', null, '1 hora', 0)`,
+                    [adminId, user.id, subjectId, message.trim()]
+                );
+            }
+
+            await connection.commit();
+            res.json({ message: `Mensaje enviado con éxito a ${activeUsers.length} usuarios activos.` });
+        } catch (txError) {
+            await connection.rollback();
+            throw txError;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error("Error al enviar mensaje global:", error);
+        res.status(500).json({ error: "Error al procesar el envío de mensaje global" });
+    }
+};

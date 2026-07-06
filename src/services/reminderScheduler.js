@@ -42,6 +42,17 @@ async function sendRemindersForWindow(intervalLabel, intervalMs, flagColumn) {
         console.log(`⏰ Se encontraron ${mentorships.length} tutorías elegibles para recordatorio (${intervalLabel}).`);
 
         for (const m of mentorships) {
+            // Si la fecha de la tutoría ya pasó en hora local de Ecuador, no debemos enviar el correo.
+            // Simplemente la marcamos como "enviada" (notificada) para que no vuelva a ser procesada.
+            const nowEcuador = getEcuadorDateTime();
+            const scheduledEcuador = getEcuadorDateTime(m.scheduled_date);
+            
+            if (scheduledEcuador <= nowEcuador) {
+                console.log(`⏰ Tutoría ID ${m.id} ya ha pasado (${scheduledEcuador} <= ${nowEcuador}). Marcando como notificada sin enviar correo.`);
+                await db.query(`UPDATE Mentorships SET ${flagColumn} = 1 WHERE id = ?`, [m.id]);
+                continue;
+            }
+
             console.log(`⏰ Enviando recordatorio (${intervalLabel}) para la tutoría ID ${m.id} (${m.subject_name})...`);
 
             // Enviar correo al aprendiz

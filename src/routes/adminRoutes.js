@@ -30,7 +30,8 @@ import {
     createReward,
     updateReward,
     deleteReward,
-    getRewardClaims
+    getRewardClaims,
+    broadcastMessage
 } from '../controllers/adminController.js';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware.js';
 import {
@@ -124,5 +125,6 @@ router.post('/rewards', createReward);
 router.put('/rewards/:id', updateReward);
 router.delete('/rewards/:id', deleteReward);
 router.get('/rewards/claims', getRewardClaims);
+router.post('/broadcast-message', broadcastMessage);
 
 export default router;
