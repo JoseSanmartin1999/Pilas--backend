@@ -30,12 +30,14 @@ const sendMailHelper = async (toEmail, subject, htmlContent) => {
     const apiKey = process.env.BREVO_API_KEY;
     const senderEmail = process.env.EMAIL_USER || 'mentoriaspilas@gmail.com';
 
-    // RNF: Si el correo remitente es de Gmail, debemos usar SMTP directo para evitar infracciones
-    // de DMARC/SPF (ya que enviar correos @gmail.com desde servidores de Brevo hace que sean bloqueados).
-    const useSMTP = !apiKey || senderEmail.toLowerCase().endsWith('@gmail.com');
+    // RNF: Render Free bloquea todos los puertos SMTP salientes (25, 465, 587).
+    // Para resolver esto en producción, debemos usar obligatoriamente la API REST de Brevo (HTTPS, puerto 443).
+    // Solo usamos SMTP como fallback local si la API Key de Brevo no está configurada.
+    const useAPI = !!apiKey;
 
-    if (!useSMTP) {
+    if (useAPI) {
         try {
+            console.log(`Enviando correo a ${toEmail} vía Brevo REST API (HTTPS)...`);
             const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: {
                     name: 'Pilas! Tutorías',
@@ -56,17 +58,14 @@ const sendMailHelper = async (toEmail, subject, htmlContent) => {
                 },
                 timeout: 8000 // 8 segundos de timeout para evitar cuelgues
             });
+            console.log(`✅ Correo enviado con éxito vía Brevo API. ID: ${response.data.messageId || 'N/A'}`);
             return response.data;
         } catch (error) {
             console.error("Error al enviar correo vía Brevo API:", error.response?.data || error.message);
             throw new Error(error.response?.data?.message || error.message);
         }
     } else {
-        if (!apiKey) {
-            console.warn("⚠️ BREVO_API_KEY no configurada. Usando fallback SMTP...");
-        } else {
-            console.log("ℹ️ Remitente de Gmail detectado. Usando SMTP oficial de Google para asegurar entrega y cumplimiento de DMARC.");
-        }
+        console.warn("⚠️ BREVO_API_KEY no configurada. Usando SMTP como fallback (Nota: Los puertos SMTP están bloqueados en Render Free)...");
         const mailOptions = {
             from: `"Pilas! Tutorías" <${senderEmail}>`,
             to: toEmail,
