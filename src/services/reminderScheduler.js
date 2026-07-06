@@ -102,14 +102,20 @@ async function sendRemindersForWindow(intervalLabel, intervalMs, flagColumn) {
 }
 
 export async function checkAndSendReminders() {
-    // Recordatorio de 24 horas (24 * 60 * 60 * 1000 ms)
-    await sendRemindersForWindow('24 horas', 24 * 60 * 60 * 1000, 'reminder_sent');
+    // Recordatorio de 24 horas (Opcional, desactivado por defecto para ahorrar créditos de Brevo)
+    if (process.env.SEND_REMINDER_24H === 'true') {
+        await sendRemindersForWindow('24 horas', 24 * 60 * 60 * 1000, 'reminder_sent');
+    }
 
-    // Recordatorio de 2 horas (2 * 60 * 60 * 1000 ms)
-    await sendRemindersForWindow('2 horas', 2 * 60 * 60 * 1000, 'reminder_2h_sent');
+    // Recordatorio de 2 horas (Principal y habilitado por defecto)
+    if (process.env.SEND_REMINDER_2H !== 'false') {
+        await sendRemindersForWindow('2 horas', 2 * 60 * 60 * 1000, 'reminder_2h_sent');
+    }
 
-    // Recordatorio de 10 minutos (10 * 60 * 1000 ms)
-    await sendRemindersForWindow('10 minutos', 10 * 60 * 1000, 'reminder_10m_sent');
+    // Recordatorio de 10 minutos (Opcional, desactivado por defecto para ahorrar créditos de Brevo)
+    if (process.env.SEND_REMINDER_10M === 'true') {
+        await sendRemindersForWindow('10 minutos', 10 * 60 * 1000, 'reminder_10m_sent');
+    }
 }
 
 export function initReminderScheduler() {
