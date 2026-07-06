@@ -69,36 +69,36 @@ export const validateRegister = [
         .custom(noSQLInjection),
 
     body('role')
-        .optional()
+        .optional({ values: 'falsy' })
         .isIn(['ADMIN', 'MENTOR', 'APRENDIZ']).withMessage('Rol inválido.'),
 
     body('current_semester')
-        .optional()
+        .optional({ values: 'falsy' })
         .isInt({ min: 1, max: 10 }).withMessage('El semestre debe ser un número entre 1 y 10.'),
 
     body('institution')
-        .optional()
+        .optional({ values: 'falsy' })
         .trim()
         .isLength({ max: 200 }).withMessage('Institución demasiado larga.')
         .escape()
         .custom(noSQLInjection),
 
     body('career')
-        .optional()
+        .optional({ values: 'falsy' })
         .trim()
         .isLength({ max: 200 }).withMessage('Carrera demasiado larga.')
         .escape()
         .custom(noSQLInjection),
 
     body('student_id')
-        .optional()
+        .optional({ values: 'falsy' })
         .trim()
         .isAlphanumeric().withMessage('El ID de estudiante solo puede contener letras y números.')
         .isLength({ max: 50 }).withMessage('ID de estudiante demasiado largo.')
         .custom(noSQLInjection),
 
     body('bio')
-        .optional()
+        .optional({ values: 'falsy' })
         .trim()
         .isLength({ max: 500 }).withMessage('La biografía no puede superar 500 caracteres.')
         .escape()
