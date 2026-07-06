@@ -30,7 +30,11 @@ const sendMailHelper = async (toEmail, subject, htmlContent) => {
     const apiKey = process.env.BREVO_API_KEY;
     const senderEmail = process.env.EMAIL_USER || 'mentoriaspilas@gmail.com';
 
-    if (apiKey) {
+    // RNF: Si el correo remitente es de Gmail, debemos usar SMTP directo para evitar infracciones
+    // de DMARC/SPF (ya que enviar correos @gmail.com desde servidores de Brevo hace que sean bloqueados).
+    const useSMTP = !apiKey || senderEmail.toLowerCase().endsWith('@gmail.com');
+
+    if (!useSMTP) {
         try {
             const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: {
@@ -58,7 +62,11 @@ const sendMailHelper = async (toEmail, subject, htmlContent) => {
             throw new Error(error.response?.data?.message || error.message);
         }
     } else {
-        console.warn("⚠️ BREVO_API_KEY no configurada. Usando fallback SMTP...");
+        if (!apiKey) {
+            console.warn("⚠️ BREVO_API_KEY no configurada. Usando fallback SMTP...");
+        } else {
+            console.log("ℹ️ Remitente de Gmail detectado. Usando SMTP oficial de Google para asegurar entrega y cumplimiento de DMARC.");
+        }
         const mailOptions = {
             from: `"Pilas! Tutorías" <${senderEmail}>`,
             to: toEmail,
