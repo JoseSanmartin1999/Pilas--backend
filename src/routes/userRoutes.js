@@ -1,5 +1,5 @@
 import express from 'express';
-import { getUserProfile, updateUserProfile, getAllMentors, upgradeToMentor, updateFeaturedBadges } from '../controllers/userController.js';
+import { getUserProfile, updateUserProfile, getAllMentors, upgradeToMentor, updateFeaturedBadges, getLeaderboard } from '../controllers/userController.js';
 import upload from '../middleware/upload.js';
 import { authenticateToken, verifyProfileOwner } from '../middleware/authMiddleware.js';
 import {
@@ -9,6 +9,9 @@ import {
 } from '../middleware/validators.js';
 
 const router = express.Router();
+
+// Obtener ranking de tutores
+router.get('/leaderboard', authenticateToken, getLeaderboard);
 
 // Obtener perfil - requiere estar autenticado
 router.get('/profile/:id', authenticateToken, validateUserIdParam, getUserProfile);
