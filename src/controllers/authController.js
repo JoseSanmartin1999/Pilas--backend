@@ -209,7 +209,7 @@ export const login = async (req, res) => {
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role },
             jwtSecret,
-            { expiresIn: jwtExpiresIn }
+            { expiresIn: user.role === 'ADMIN' ? '20m' : jwtExpiresIn }
         );
 
         res.json({

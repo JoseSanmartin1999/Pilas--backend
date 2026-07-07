@@ -92,8 +92,8 @@ export const updateUserStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body; // 'ACTIVO' o 'BLOQUEADO'
 
-    if (!['ACTIVO', 'BLOQUEADO'].includes(status)) {
-        return res.status(400).json({ error: "Estado inválido. Debe ser ACTIVO o BLOQUEADO." });
+    if (!['ACTIVO', 'BLOQUEADO', 'PENDIENTE'].includes(status)) {
+        return res.status(400).json({ error: "Estado inválido. Debe ser ACTIVO, BLOQUEADO o PENDIENTE." });
     }
 
     try {
