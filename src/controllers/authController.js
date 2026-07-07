@@ -4,6 +4,115 @@ import jwt from 'jsonwebtoken';
 import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../services/emailService.js';
 import { checkAndAwardBadges, updateLoginStreak } from '../services/gamificationService.js';
 import { ensureWelcomeMessages } from '../services/notificationService.js';
+import redis from '../config/redis.js';
+
+// Fallback en memoria si Redis no está disponible
+const memoryStore = {
+    recoveryAttempts: new Map(), // email -> { count, expires }
+    loginAttempts: new Map(),    // email -> { count, expires }
+    loginBlocks: new Map()       // email -> expires
+};
+
+// Helper para obtener intentos de recuperación
+const getRecoveryAttempts = async (email) => {
+    const key = `password_recovery_limit:${email}`;
+    try {
+        const val = await redis.get(key);
+        return val ? parseInt(val, 10) : 0;
+    } catch (err) {
+        console.warn("⚠️ Advertencia Redis: Usando fallback en memoria para forgot password:", err.message);
+        const data = memoryStore.recoveryAttempts.get(email);
+        if (data && Date.now() < data.expires) {
+            return data.count;
+        }
+        return 0;
+    }
+};
+
+// Helper para incrementar intentos de recuperación
+const incrementRecoveryAttempts = async (email) => {
+    const key = `password_recovery_limit:${email}`;
+    try {
+        const val = await redis.incr(key);
+        if (val === 1) {
+            await redis.expire(key, 900); // 15 minutos
+        }
+        return val;
+    } catch (err) {
+        console.warn("⚠️ Advertencia Redis: Incrementando intento en memoria:", err.message);
+        let data = memoryStore.recoveryAttempts.get(email);
+        if (!data || Date.now() > data.expires) {
+            data = { count: 0, expires: Date.now() + 15 * 60 * 1000 };
+        }
+        data.count += 1;
+        memoryStore.recoveryAttempts.set(email, data);
+        return data.count;
+    }
+};
+
+// Helper para verificar bloqueo de login
+const checkLoginBlock = async (email) => {
+    const key = `login_block:${email}`;
+    try {
+        const isBlocked = await redis.exists(key);
+        if (isBlocked === 1) {
+            const ttl = await redis.ttl(key);
+            return { blocked: true, timeLeft: ttl > 0 ? Math.ceil(ttl / 60) : 10 };
+        }
+        return { blocked: false };
+    } catch (err) {
+        console.warn("⚠️ Advertencia Redis: Leyendo bloqueo en memoria:", err.message);
+        const expires = memoryStore.loginBlocks.get(email);
+        if (expires && Date.now() < expires) {
+            return { blocked: true, timeLeft: Math.ceil((expires - Date.now()) / 60000) };
+        }
+        return { blocked: false };
+    }
+};
+
+// Helper para registrar intento fallido de login y bloquear si excede 5
+const registerFailedLogin = async (email) => {
+    const attemptsKey = `login_attempts:${email}`;
+    const blockKey = `login_block:${email}`;
+    try {
+        const count = await redis.incr(attemptsKey);
+        if (count === 1) {
+            await redis.expire(attemptsKey, 600); // 10 minutos
+        }
+        if (count >= 5) {
+            await redis.set(blockKey, '1', 'EX', 600); // Bloqueo por 10 minutos
+            await redis.del(attemptsKey);
+            return { blocked: true, attemptsLeft: 0 };
+        }
+        return { blocked: false, attemptsLeft: 5 - count };
+    } catch (err) {
+        console.warn("⚠️ Advertencia Redis: Registrando intento fallido en memoria:", err.message);
+        let data = memoryStore.loginAttempts.get(email);
+        if (!data || Date.now() > data.expires) {
+            data = { count: 0, expires: Date.now() + 10 * 60 * 1000 };
+        }
+        data.count += 1;
+        memoryStore.loginAttempts.set(email, data);
+
+        if (data.count >= 5) {
+            memoryStore.loginBlocks.set(email, Date.now() + 10 * 60 * 1000);
+            memoryStore.loginAttempts.delete(email);
+            return { blocked: true, attemptsLeft: 0 };
+        }
+        return { blocked: false, attemptsLeft: 5 - data.count };
+    }
+};
+
+// Helper para limpiar intentos fallidos de login tras éxito
+const clearFailedLogins = async (email) => {
+    const attemptsKey = `login_attempts:${email}`;
+    try {
+        await redis.del(attemptsKey);
+    } catch (err) {
+        console.warn("⚠️ Advertencia Redis: Limpiando intentos fallidos en memoria:", err.message);
+        memoryStore.loginAttempts.delete(email);
+    }
+};
 
 export const register = async (req, res) => {
     const {
@@ -149,6 +258,14 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
     const { email, password } = req.body;
     try {
+        // Verificar si la cuenta está bloqueada temporalmente por fuerza bruta
+        const blockStatus = await checkLoginBlock(email);
+        if (blockStatus.blocked) {
+            return res.status(403).json({ 
+                message: `Tu cuenta ha sido bloqueada temporalmente por demasiados intentos fallidos. Inténtalo de nuevo en ${blockStatus.timeLeft} minutos.` 
+            });
+        }
+
         const [users] = await db.query(`
             SELECT u.*, p.full_name, p.profile_photo_url, p.bio, p.institution, p.career, p.student_id, p.current_semester, p.xp, p.level, p.espe_coins,
                    (SELECT r.name FROM Roles r JOIN User_Roles ur ON r.id = ur.role_id WHERE ur.user_id = u.id LIMIT 1) AS role
@@ -179,8 +296,15 @@ export const login = async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password_hash);
 
         if (!isMatch) {
-            return res.status(401).json({ message: "Credenciales incorrectas" });
+            const result = await registerFailedLogin(email);
+            if (result.blocked) {
+                return res.status(403).json({ message: "Has superado el límite de 5 intentos fallidos. Tu cuenta ha sido bloqueada durante 10 minutos." });
+            }
+            return res.status(401).json({ message: `Credenciales incorrectas. Te quedan ${result.attemptsLeft} intentos antes de bloquear la cuenta.` });
         }
+
+        // Si es correcto, limpiar cualquier intento previo fallido
+        await clearFailedLogins(email);
 
         // Actualizar streak de logins consecutivos
         try {
@@ -231,6 +355,14 @@ export const login = async (req, res) => {
 export const forgotPassword = async (req, res) => {
     const { email } = req.body;
     try {
+        // Verificar límite de solicitudes de recuperación (máximo 3 peticiones en 15 minutos)
+        const recoveryCount = await getRecoveryAttempts(email);
+        if (recoveryCount >= 3) {
+            return res.status(429).json({ 
+                message: "Has excedido el límite de 3 solicitudes de recuperación en 15 minutos. Por favor, espera antes de intentar nuevamente." 
+            });
+        }
+
         const [users] = await db.query('SELECT * FROM Users WHERE email = ?', [email]);
         if (users.length === 0) {
             return res.status(404).json({ message: "Usuario no encontrado" });
@@ -249,6 +381,9 @@ export const forgotPassword = async (req, res) => {
             console.error("Error al enviar correo de recuperación:", mailErr);
             return res.status(500).json({ message: `No se pudo enviar el correo de recuperación. Detalle: ${mailErr.message}. Asegúrate de configurar las variables de entorno en Render.` });
         }
+
+        // Incrementar intentos exitosamente solicitados
+        await incrementRecoveryAttempts(email);
 
         res.json({ message: "Código de recuperación enviado al correo." });
     } catch (error) {
