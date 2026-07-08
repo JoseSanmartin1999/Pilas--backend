@@ -45,7 +45,7 @@ const generalLimiter = rateLimit({
     limit: 1000, // Aumentado a 1000 para evitar bloqueos por navegación normal (SPA)
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    validate: { trustProxy: false, keyGenerator: false },
+    validate: { trustProxy: false, keyGeneratorIpFallback: false },
     keyGenerator: (req) => {
         // Intentar identificar al usuario por su token de autenticación si existe
         const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -67,7 +67,7 @@ const authLimiter = rateLimit({
     limit: 30, // Un poco más flexible para intentos de autenticación
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    validate: { trustProxy: false, keyGenerator: false },
+    validate: { trustProxy: false, keyGeneratorIpFallback: false },
     keyGenerator: (req) => {
         if (req.headers['cf-connecting-ip']) {
             return req.headers['cf-connecting-ip'];
