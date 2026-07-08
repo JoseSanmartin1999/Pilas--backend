@@ -21,58 +21,75 @@ const transporter = nodemailer.createTransport({
 });
 
 /**
+ * Helper para enviar correos vía Brevo API.
+ */
+const sendMailViaBrevo = async (toEmail, subject, htmlContent, senderEmail) => {
+    const apiKey = process.env.BREVO_API_KEY;
+    try {
+        console.log(`Enviando correo a ${toEmail} vía Brevo REST API (HTTPS)...`);
+        const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
+            sender: {
+                name: 'Pilas! Tutorías',
+                email: senderEmail
+            },
+            to: [
+                {
+                    email: toEmail
+                }
+            ],
+            subject: subject,
+            htmlContent: htmlContent
+        }, {
+            headers: {
+                'accept': 'application/json',
+                'api-key': apiKey,
+                'content-type': 'application/json'
+            },
+            timeout: 8000 // 8 segundos de timeout para evitar cuelgues
+        });
+        console.log(`✅ Correo enviado con éxito vía Brevo API. ID: ${response.data.messageId || 'N/A'}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error al enviar correo vía Brevo API:", error.response?.data || error.message);
+        throw new Error(error.response?.data?.message || error.message);
+    }
+};
+
+/**
  * Helper genérico para enviar correos.
- * Si se encuentra BREVO_API_KEY en las variables de entorno, realiza una petición POST
- * a la API REST de Brevo (HTTPS, puerto 443). Si no, realiza el envío tradicional
- * por SMTP (Nodemailer) como fallback.
+ * Prioriza Gmail (Nodemailer SMTP) si EMAIL_USER y EMAIL_PASSWORD están configurados.
+ * Si falla (o no están definidos) e indica la presencia de BREVO_API_KEY, aplica un fallback con Brevo.
  */
 const sendMailHelper = async (toEmail, subject, htmlContent) => {
-    const apiKey = process.env.BREVO_API_KEY;
     const senderEmail = process.env.EMAIL_USER || 'mentoriaspilas@gmail.com';
+    const useGmail = process.env.EMAIL_USER && process.env.EMAIL_PASSWORD;
+    const hasBrevo = !!process.env.BREVO_API_KEY;
 
-    // RNF: Render Free bloquea todos los puertos SMTP salientes (25, 465, 587).
-    // Para resolver esto en producción, debemos usar obligatoriamente la API REST de Brevo (HTTPS, puerto 443).
-    // Solo usamos SMTP como fallback local si la API Key de Brevo no está configurada.
-    const useAPI = !!apiKey;
-
-    if (useAPI) {
+    if (useGmail) {
         try {
-            console.log(`Enviando correo a ${toEmail} vía Brevo REST API (HTTPS)...`);
-            const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
-                sender: {
-                    name: 'Pilas! Tutorías',
-                    email: senderEmail
-                },
-                to: [
-                    {
-                        email: toEmail
-                    }
-                ],
+            console.log(`Enviando correo a ${toEmail} vía Gmail SMTP...`);
+            const mailOptions = {
+                from: `"Pilas! Tutorías" <${senderEmail}>`,
+                to: toEmail,
                 subject: subject,
-                htmlContent: htmlContent
-            }, {
-                headers: {
-                    'accept': 'application/json',
-                    'api-key': apiKey,
-                    'content-type': 'application/json'
-                },
-                timeout: 8000 // 8 segundos de timeout para evitar cuelgues
-            });
-            console.log(`✅ Correo enviado con éxito vía Brevo API. ID: ${response.data.messageId || 'N/A'}`);
-            return response.data;
+                html: htmlContent
+            };
+            const info = await transporter.sendMail(mailOptions);
+            console.log(`✅ Correo enviado con éxito vía Gmail SMTP. ID: ${info.messageId}`);
+            return info;
         } catch (error) {
-            console.error("Error al enviar correo vía Brevo API:", error.response?.data || error.message);
-            throw new Error(error.response?.data?.message || error.message);
+            console.error("⚠️ Falló el envío de correo por Gmail SMTP:", error.message);
+            if (hasBrevo) {
+                console.log("Aplicando fallback automático: intentando envío por Brevo API...");
+                return sendMailViaBrevo(toEmail, subject, htmlContent, senderEmail);
+            }
+            throw error;
         }
+    } else if (hasBrevo) {
+        console.log("Configuración de Gmail ausente. Usando Brevo API directamente...");
+        return sendMailViaBrevo(toEmail, subject, htmlContent, senderEmail);
     } else {
-        console.warn("⚠️ BREVO_API_KEY no configurada. Usando SMTP como fallback (Nota: Los puertos SMTP están bloqueados en Render Free)...");
-        const mailOptions = {
-            from: `"Pilas! Tutorías" <${senderEmail}>`,
-            to: toEmail,
-            subject: subject,
-            html: htmlContent
-        };
-        return transporter.sendMail(mailOptions);
+        throw new Error("No se ha configurado ningún canal de envío de correos (Gmail o Brevo).");
     }
 };
 

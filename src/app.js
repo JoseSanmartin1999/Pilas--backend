@@ -14,8 +14,8 @@ import rewardRoutes from './routes/rewardRoutes.js';
 
 const app = express();
 
-// Confiar en los proxies inversos (Render/Cloudflare) para registrar la IP del cliente real en rate-limiting
-app.set('trust proxy', 1);
+// Confiar en los proxies inversos de manera robusta
+app.set('trust proxy', true);
 
 // 1. Cabeceras de seguridad con Helmet
 app.use(helmet());
@@ -39,20 +39,41 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// 3. Limitación de Tasa (Rate Limiting)
+// 3. Limitación de Tasa (Rate Limiting) robusta y flexible
 const generalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 200,
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    limit: 1000, // Aumentado a 1000 para evitar bloqueos por navegación normal (SPA)
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: { error: 'Demasiadas solicitudes desde esta IP, por favor inténtalo de nuevo más tarde.' }
+    validate: { trustProxy: false },
+    keyGenerator: (req) => {
+        // Intentar identificar al usuario por su token de autenticación si existe
+        const authHeader = req.headers.authorization || req.headers.Authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            return authHeader.substring(7); // Limita por usuario logueado, útil para NAT/universidades
+        }
+        // Si hay cabecera de Cloudflare u otros proxies
+        if (req.headers['cf-connecting-ip']) {
+            return req.headers['cf-connecting-ip'];
+        }
+        // Fallback a req.ip resuelto por Express
+        return req.ip;
+    },
+    message: { error: 'Demasiadas solicitudes, por favor inténtalo de nuevo más tarde.' }
 });
 
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 20,
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    limit: 30, // Un poco más flexible para intentos de autenticación
     standardHeaders: 'draft-7',
     legacyHeaders: false,
+    validate: { trustProxy: false },
+    keyGenerator: (req) => {
+        if (req.headers['cf-connecting-ip']) {
+            return req.headers['cf-connecting-ip'];
+        }
+        return req.ip;
+    },
     message: { error: 'Límite de solicitudes de autenticación superado. Inténtalo de nuevo más tarde.' }
 });
 
