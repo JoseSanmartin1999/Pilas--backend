@@ -39,6 +39,26 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+// Helper robusto para extraer la dirección IP real del cliente detrás de proxies (Nginx, Render, Cloudflare, etc.)
+const getClientIp = (req) => {
+    // 1. Intentar cabecera estándar X-Forwarded-For (la primera IP de la lista es el cliente real)
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    if (xForwardedFor) {
+        const ips = xForwardedFor.split(',');
+        return ips[0].trim();
+    }
+    // 2. Cabecera común de Nginx (X-Real-IP)
+    if (req.headers['x-real-ip']) {
+        return req.headers['x-real-ip'];
+    }
+    // 3. Cabecera de Cloudflare (CF-Connecting-IP)
+    if (req.headers['cf-connecting-ip']) {
+        return req.headers['cf-connecting-ip'];
+    }
+    // 4. Fallback a req.ip resuelto por Express o socket remoto
+    return req.ip || req.socket.remoteAddress;
+};
+
 // 3. Limitación de Tasa (Rate Limiting) robusta y flexible
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutos
@@ -52,12 +72,7 @@ const generalLimiter = rateLimit({
         if (authHeader && authHeader.startsWith('Bearer ')) {
             return authHeader.substring(7); // Limita por usuario logueado, útil para NAT/universidades
         }
-        // Si hay cabecera de Cloudflare u otros proxies
-        if (req.headers['cf-connecting-ip']) {
-            return req.headers['cf-connecting-ip'];
-        }
-        // Fallback a req.ip resuelto por Express
-        return req.ip;
+        return getClientIp(req);
     },
     message: { error: 'Demasiadas solicitudes, por favor inténtalo de nuevo más tarde.' }
 });
@@ -69,10 +84,7 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
     validate: { trustProxy: false, keyGeneratorIpFallback: false },
     keyGenerator: (req) => {
-        if (req.headers['cf-connecting-ip']) {
-            return req.headers['cf-connecting-ip'];
-        }
-        return req.ip;
+        return getClientIp(req);
     },
     message: { error: 'Límite de solicitudes de autenticación superado. Inténtalo de nuevo más tarde.' }
 });
