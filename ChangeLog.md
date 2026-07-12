@@ -2,6 +2,47 @@
 
 Este documento registra las mejoras y cambios realizados en el sistema de tutorías para optimizar la coordinación entre mentores y alumnos.
 
+## [2026-07-09] - PWA, Sistema de Gamificación con ESPE-Coins, Guided Tours, Filtros por Carrera y Hardening de Seguridad
+
+### Backend (Lógica de Negocio y Configuración)
+- **Gamificación y Logros Completo (`seed_30_badges.js` [NEW], `gamificationService.js` [MODIFY])**:
+    - **[AGREGADO]** Script de siembra para 30 logros/insignias del sistema, incluyendo hitos por logins acumulados, calificaciones perfectas recibidas y más.
+    - **[AGREGADO]** Insignia especial de lanzamiento 'Pilas! antes que todos' para usuarios registrados tempranamente, con elegibilidad extendida hasta el 25 de julio de 2026.
+- **Recompensas y Tienda de ESPE-Coins (`migrate.js` [MODIFY], `create_admin_tables.sql` [MODIFY], `adminController.js` [MODIFY], `rewardController.js` [MODIFY], `notificationService.js` [MODIFY], `adminRoutes.js` [MODIFY], `rewardRoutes.js` [MODIFY])**:
+    - **[AGREGADO]** Funcionalidad completa en el backend para gestionar el saldo de ESPE-Coins, reclamos de recompensas académicas y prevención de canjes duplicados.
+    - **[AGREGADO]** Sistema de notificaciones del sistema personalizadas para alertar al usuario cuando recibe un logro o cuando el administrador procesa un reclamo.
+    - **[AGREGADO]** Endpoints y controladores en el Panel de Administrador para gestionar el flujo de reclamaciones de beneficios en la tienda de ESPE-Coins.
+- **Filtrado Confiable por Carrera (`Profiles` [MODIFY], `authController.js` [MODIFY], `userRepository.js` [MODIFY], `subjectController.js` [MODIFY])**:
+    - **[AGREGADO]** Adición de la columna `career_id` (FK) en la tabla de perfiles y actualización de lógica de filtrado de materias para garantizar la visualización exacta de asignaturas según la carrera del alumno.
+    - **[CORREGIDO]** Corrección en el backend del filtro de asignaturas por carrera que presentaba una condición `LIKE` invertida y un fallback inseguro.
+    - **[AGREGADO]** Migración SQL para independizar las materias correspondientes a Ingeniería Mecánica.
+- **Buscador de Tutores y Mentorías (`userController.js` [MODIFY])**:
+    - **[ACTUALIZADO]** Modificación en el listado general de tutores para retornar exclusivamente a mentores con cuentas verificadas y en estado activo.
+- **Mensajería y Difusión de Administrador (`adminController.js` [MODIFY])**:
+    - **[AGREGADO]** Funcionalidad para que el administrador redacte mensajes masivos de difusión (broadcast) especificando asunto (`subject`) y cuerpo de texto.
+    - **[CORREGIDO]** Filtrado de notificaciones de sistema para excluirlas de los contadores de estadísticas y calendarios de tutorías aceptadas.
+- **Configuración de Seguridad y Expiración en Sesión Admin (`authController.js` [MODIFY])**:
+    - **[AGREGADO]** Expiración JWT limitada a 20 minutos exclusivamente para las sesiones iniciadas con rol de `'ADMIN'`.
+    - **[ACTUALIZADO]** Permitir el estado `'PENDIENTE'` en las modificaciones de estado de cuenta de administrador.
+
+### Backend (Infraestructura y Seguridad)
+- **Robustez en Notificaciones por Correo (`emailService.js` [MODIFY], `reminderScheduler.js` [MODIFY])**:
+    - **[AGREGADO]** Integración dual de canales de correo: Prioriza el uso de Google SMTP si está configurado y aplica un fallback automático y fluido a la API REST de Brevo (HTTPS) en caso de fallos.
+    - **[CORREGIDO]** Uso mandatorio de Brevo API vía HTTPS para evadir el bloqueo de puertos de salida SMTP del plan gratuito de Render.
+    - **[AGREGADO]** Parametrización opcional por variables de entorno para los recordatorios automáticos de correo (24h y 10m) a fin de mitigar el consumo de créditos.
+    - **[CORREGIDO]** Exclusión de la cuenta virtual "Pilas! Comunidad" en la consulta de base de datos del despachador de recordatorios.
+- **Protección contra Fuerza Bruta y Control de Intentos (`authController.js` [MODIFY], `redis.js` [MODIFY])**:
+    - **[AGREGADO]** Bloqueo automático de inicio de sesión durante 10 minutos al acumular 5 intentos fallidos consecutivos de contraseña.
+    - **[AGREGADO]** Límite estricto de solicitudes para la recuperación de contraseña: Máximo de 3 peticiones en un lapso de 15 minutos.
+    - **[AGREGADO]** Adaptación para almacenar estos límites temporales usando Redis, incorporando un gestor en memoria (`memoryStore`) como fallback resiliente cuando Redis no se encuentra disponible en desarrollo o producción.
+- **Extractor de IP y Rate Limiting Detrás de Proxies (`app.js` [MODIFY])**:
+    - **[AGREGADO]** Función auxiliar robusta `getClientIp` para identificar y extraer la IP real del usuario a través de las cabeceras `X-Forwarded-For`, `X-Real-IP` o `CF-Connecting-IP`.
+    - **[ACTUALIZADO]** Ajuste de `generalLimiter` y `authLimiter` para limitar peticiones basándose en la IP devuelta por `getClientIp`, y adición del parámetro `validate: { trustProxy: false, keyGenerator: false }` para suprimir advertencias de Express Rate Limit.
+    - **[ACTUALIZADO]** Configuración robusta del trust proxy de Express (`app.set('trust proxy', true)`) y aumento del límite general a 1000 reqs/15m para prevenir bloqueos por navegación SPA normal.
+    - **[AGREGADO]** Adición de la URL de despliegue en Vercel a la lista blanca de CORS.
+
+---
+
 ## [2026-06-21] - Selección de Insignias, Notificación de Logros y Corrección de Recordatorios con Zona Horaria
 
 ### Frontend (Personalización e Insignias)
@@ -31,13 +72,18 @@ Este documento registra las mejoras y cambios realizados en el sistema de tutor�
     - **[AGREGADO]** Middleware `helmet` para configurar cabeceras HTTP seguras contra secuestros de click y sniffing.
     - **[AGREGADO]** Middleware `express-rate-limit` con límites de tasa generales (200 reqs / 15m) y limitador estricto para autenticación (20 reqs / 15m) para prevenir fuerza bruta y DoS.
     - **[ACTUALIZADO]** Configuración restrictiva de CORS usando whitelist que incluye dominios oficiales y permite acceso local solo en desarrollo.
-- **Autenticación con JWT (`authMiddleware.js` [NEW], `authController.js` [MODIFY])**:
+    - **[CORREGIDO]** Ajuste en el orden de importación de `dotenv` para evitar el hoisting de dependencias y garantizar que las variables de entorno se carguen antes de cualquier otro módulo.
+- **Autenticación con JWT (`authMiddleware.js` [MODIFY], `authController.js` [MODIFY])**:
     - **[AGREGADO]** Generación y firma de tokens JWT (`jsonwebtoken`) que encapsulan el id, email y rol del usuario tras un inicio de sesión exitoso.
     - **[AGREGADO]** Middlewares `authenticateToken`, `requireRole`, `verifyProfileOwner` y `verifyMentorshipParticipant` para validar sesiones y controlar accesos basados en roles.
-- **Protección contra IDOR / BOLA (`userRoutes.js` [MODIFY], `adminRoutes.js` [MODIFY], `chatRoutes.js` [MODIFY], `repositoryRoutes.js` [MODIFY], `mentorshipRoutes.js` [MODIFY], `ticketRoutes.js` [MODIFY], `rewardRoutes.js` [MODIFY])**:
+    - **[AGREGADO]** Modificación en `authenticateToken` para permitir la recuperación de tokens a través de parámetros de consulta (`req.query.token`), posibilitando descargas directas seguras desde el repositorio.
+- **Protección contra IDOR / BOLA e Inyección SQL (`validators.js` [NEW], `userRoutes.js` [MODIFY], `adminRoutes.js` [MODIFY], `chatRoutes.js` [MODIFY], `repositoryRoutes.js` [MODIFY], `mentorshipRoutes.js` [MODIFY], `ticketRoutes.js` [MODIFY], `rewardRoutes.js` [MODIFY])**:
+    - **[AGREGADO]** Middleware centralizado de validación (`validators.js`) que sanitiza y valida las entradas de todas las rutas de la API, previniendo ataques de inyección SQL de raíz.
     - **[ACTUALIZADO]** Protección integral de todas las rutas de la API, requiriendo token JWT y autorizaciones correspondientes.
     - **[CORREGIDO]** Corrección de endpoints en controladores (`repositoryController.js`, `mentorshipController.js`, `ticketController.js`, `rewardController.js`, `adminController.js`) para resolver el ID de usuario autenticado directamente desde `req.user.id` en lugar de confiar en payloads editables del cliente.
     - **[CORREGIDO]** Restricción de `GET /api/admin/tutors/applications` para que usuarios comunes solo consulten sus propias postulaciones, evitando fuga de datos de otros alumnos.
+- **Gamificación (`gamificationService.js` [MODIFY])**:
+    - **[CORREGIDO]** Modificación de la función para calcular la racha de logins (`login streak`) utilizando strings de fechas locales, previniendo desfases horarios entre el servidor de base de datos y la hora local.
 
 ---
 
