@@ -57,13 +57,13 @@ export const getUserProfile = async (userId) => {
         const apprenticeRows = await userRepository.getApprenticeHours(userId);
         apprenticeHours = apprenticeRows.map(r => ({
             ...r,
-            total_hours: parseFloat(Number(r.total_hours).toFixed(2))
+            total_hours: Number.parseFloat(Number(r.total_hours).toFixed(2))
         }));
 
         const mentorRows = await userRepository.getMentorHours(userId);
         mentorHours = mentorRows.map(r => ({
             ...r,
-            total_hours: parseFloat(Number(r.total_hours).toFixed(2))
+            total_hours: Number.parseFloat(Number(r.total_hours).toFixed(2))
         }));
     } catch (e) {
         console.error("Error obteniendo horas de tutorías:", e.message);
@@ -129,7 +129,7 @@ export const getAllMentors = async (excludeId) => {
     const mentors = await userRepository.getAllMentors(excludeId);
     return mentors.map(m => ({
         ...m,
-        score: parseFloat(Number(m.score).toFixed(1)),
+        score: Number.parseFloat(Number(m.score).toFixed(1)),
         materias: m.materias_nombres ? m.materias_nombres.split(', ') : []
     }));
 };

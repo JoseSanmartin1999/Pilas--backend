@@ -45,3 +45,8 @@ Thumbs.db
 scratch/
 temp/
 tmp/
+
+# SonarQube & Coverage & Test logs
+.scannerwork/
+coverage/
+*.txt

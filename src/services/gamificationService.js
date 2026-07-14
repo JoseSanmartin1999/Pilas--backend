@@ -249,7 +249,7 @@ export const getTopMentors = async () => {
             const formatted = [];
             for (let i = 0; i < top.length; i += 2) {
                 const userId = top[i];
-                const score = parseFloat(top[i+1]);
+                const score = Number.parseFloat(top[i+1]);
                 
                 const [userRows] = await db.query(`
                     SELECT u.id, p.full_name, p.profile_photo_url, p.career, p.current_semester 

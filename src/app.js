@@ -21,15 +21,15 @@ app.set('trust proxy', true);
 app.use(helmet());
 
 // 2. Configuración Restringida de CORS
-const whitelist = [
+const whitelist = new Set([
     'http://localhost:5173',
     'https://pilas-tutorias.web.app',
     'https://pilas-tutorias.firebaseapp.com',
     'https://pilas-frontend.vercel.app'
-];
+]);
 const corsOptions = {
     origin: function (origin, callback) {
-        if (!origin || whitelist.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+        if (!origin || whitelist.has(origin) || process.env.NODE_ENV === 'development') {
             callback(null, true);
         } else {
             callback(new Error('Acceso denegado por políticas de CORS (Pilas! Ciberseguridad)'));

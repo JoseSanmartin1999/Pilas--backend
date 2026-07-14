@@ -58,7 +58,7 @@ export function parseAndFormatEcuadorDate(dateInput) {
     }
 
     // Validar si la fecha es inválida
-    if (isNaN(dateObj.getTime())) {
+    if (Number.isNaN(dateObj.getTime())) {
         return 'Fecha inválida';
     }
 

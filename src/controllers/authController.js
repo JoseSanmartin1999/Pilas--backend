@@ -5,6 +5,7 @@ import { sendPasswordResetEmail, sendEmailVerificationEmail } from '../services/
 import { checkAndAwardBadges, updateLoginStreak } from '../services/gamificationService.js';
 import { ensureWelcomeMessages } from '../services/notificationService.js';
 import redis from '../config/redis.js';
+import crypto from 'node:crypto';
 
 // Fallback en memoria si Redis no está disponible
 const memoryStore = {
@@ -18,7 +19,7 @@ const getRecoveryAttempts = async (email) => {
     const key = `password_recovery_limit:${email}`;
     try {
         const val = await redis.get(key);
-        return val ? parseInt(val, 10) : 0;
+        return val ? Number.parseInt(val, 10) : 0;
     } catch (err) {
         console.warn("⚠️ Advertencia Redis: Usando fallback en memoria para forgot password:", err.message);
         const data = memoryStore.recoveryAttempts.get(email);
@@ -149,7 +150,7 @@ export const register = async (req, res) => {
     const profile_photo_url = req.file ? req.file.path : null;
 
     // Validar que si se registra como MENTOR, esté al menos en 4to semestre
-    if (role === 'MENTOR' && parseInt(current_semester, 10) < 4) {
+    if (role === 'MENTOR' && Number.parseInt(current_semester, 10) < 4) {
         return res.status(400).json({ message: "Solo los estudiantes de 4to semestre en adelante pueden registrarse como mentores/tutores." });
     }
 
@@ -158,8 +159,8 @@ export const register = async (req, res) => {
         return res.status(400).json({ message: "El correo debe ser institucional de la ESPE (debe terminar en @espe.edu.ec)." });
     }
 
-    // Generar código de verificación de 6 dígitos
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generar código de verificación de 6 dígitos usando RNG criptográficamente seguro
+    const verificationCode = crypto.randomInt(100000, 1000000).toString();
     // Expiración en 24 horas
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
 
@@ -369,7 +370,8 @@ export const forgotPassword = async (req, res) => {
         }
 
         const user = users[0];
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generar código seguro de 6 dígitos usando RNG criptográfico
+        const code = crypto.randomInt(100000, 1000000).toString();
         // MySQL TIMESTAMP format YYYY-MM-DD HH:MM:SS
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
 
@@ -481,7 +483,8 @@ export const resendVerificationCode = async (req, res) => {
             return res.status(400).json({ message: "Esta cuenta ya se encuentra activa." });
         }
 
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generar código seguro de 6 dígitos usando RNG criptográfico
+        const code = crypto.randomInt(100000, 1000000).toString();
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
 
         await db.query(

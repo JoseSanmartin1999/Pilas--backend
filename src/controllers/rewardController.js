@@ -1,4 +1,5 @@
 import db from '../config/db.js';
+import crypto from 'node:crypto';
 
 // 1. Obtener todas las recompensas activas
 export const getRewards = async (req, res, next) => {
@@ -184,7 +185,7 @@ export const redeemCoupon = async (req, res, next) => {
 
         const newCoins = coins - cost;
         await db.query("UPDATE Profiles SET espe_coins = ? WHERE user_id = ?", [newCoins, userId]);
-        const couponCode = 'ESPE-COIN-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        const couponCode = 'ESPE-COIN-' + crypto.randomBytes(3).toString('hex').toUpperCase();
 
         res.json({
             message: "Cupón canjeado exitosamente.",

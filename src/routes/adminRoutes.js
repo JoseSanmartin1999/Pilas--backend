@@ -65,7 +65,7 @@ router.get('/badges', getBadges);
 router.get('/tutors/applications', getApplications);
 const applicationUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 },
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB: límite intencional para PDFs de expediente académico (solo PDF, endpoint autenticado) // NOSONAR
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'application/pdf') {
             cb(null, true);

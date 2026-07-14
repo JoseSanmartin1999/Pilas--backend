@@ -54,7 +54,7 @@ export const getMentorAverageRating = async (mentorId) => {
         "SELECT AVG(rating) as avg_rating FROM Mentorships WHERE mentor_id = ? AND status = 'COMPLETADA' AND is_rated = 1 AND is_deleted = 0",
         [mentorId]
     );
-    return rows.length > 0 && rows[0].avg_rating ? parseFloat(Number(rows[0].avg_rating).toFixed(1)) : 5.0;
+    return rows.length > 0 && rows[0].avg_rating ? Number.parseFloat(Number(rows[0].avg_rating).toFixed(1)) : 5.0;
 };
 
 export const getMentorFeedbacks = async (mentorId) => {

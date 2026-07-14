@@ -2,7 +2,7 @@ import db from '../config/db.js';
 import { uploadToImageKit } from '../config/imagekit.js';
 import { uploadToCloudinary } from '../config/cloudinaryRepository.js';
 import { PDFParse } from 'pdf-parse';
-import fs from 'fs';
+
 
 // 1. Estadísticas de la página
 export const getStats = async (req, res) => {
@@ -48,8 +48,8 @@ export const getStats = async (req, res) => {
 
         const totalUsers = Object.values(rolesCount).reduce((a, b) => a + b, 0);
         const totalMentorships = Object.values(statusCount).reduce((a, b) => a + b, 0);
-        const avgRating = ratings[0]?.avg_rating ? parseFloat(Number(ratings[0].avg_rating).toFixed(1)) : 5.0;
-        const totalMB = storage[0]?.total_bytes ? parseFloat((storage[0].total_bytes / (1024 * 1024)).toFixed(2)) : 0.0;
+        const avgRating = ratings[0]?.avg_rating ? Number.parseFloat(Number(ratings[0].avg_rating).toFixed(1)) : 5.0;
+        const totalMB = storage[0]?.total_bytes ? Number.parseFloat((storage[0].total_bytes / (1024 * 1024)).toFixed(2)) : 0.0;
 
         res.json({
             users: {
@@ -548,9 +548,9 @@ export const getReportData = async (req, res) => {
 
         const totalUsers = Object.values(rolesCount).reduce((a, b) => a + b, 0);
         const totalMentorships = Object.values(statusCount).reduce((a, b) => a + b, 0);
-        const avgRating = ratings[0]?.avg_rating ? parseFloat(Number(ratings[0].avg_rating).toFixed(1)) : 0;
+        const avgRating = ratings[0]?.avg_rating ? Number.parseFloat(Number(ratings[0].avg_rating).toFixed(1)) : 0;
         const totalRated = ratings[0]?.total_rated || 0;
-        const totalMB = storage[0]?.total_bytes ? parseFloat((storage[0].total_bytes / (1024 * 1024)).toFixed(2)) : 0.0;
+        const totalMB = storage[0]?.total_bytes ? Number.parseFloat((storage[0].total_bytes / (1024 * 1024)).toFixed(2)) : 0.0;
 
         const appStatusCount = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
         appStats.forEach(a => { if (appStatusCount[a.status] !== undefined) appStatusCount[a.status] = a.count; });
@@ -929,7 +929,7 @@ export const createSubject = async (req, res) => {
     try {
         const [result] = await db.query(
             "INSERT INTO Subjects (name, semester, code, career_id) VALUES (?, ?, ?, ?)",
-            [name, parseInt(semester, 10), code || null, parseInt(career_id, 10)]
+            [name, Number.parseInt(semester, 10), code || null, Number.parseInt(career_id, 10)]
         );
         res.status(201).json({
             message: "Materia creada correctamente.",
@@ -950,7 +950,7 @@ export const updateSubject = async (req, res) => {
     try {
         const [result] = await db.query(
             "UPDATE Subjects SET name = ?, semester = ?, code = ?, career_id = ? WHERE id = ?",
-            [name, parseInt(semester, 10), code || null, parseInt(career_id, 10), id]
+            [name, Number.parseInt(semester, 10), code || null, Number.parseInt(career_id, 10), id]
         );
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: "Materia no encontrada." });

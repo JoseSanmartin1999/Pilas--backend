@@ -11,7 +11,7 @@
  * Todas las rutas de la API deben usar estos validadores.
  * ============================================================
  */
-import { body, param, query, validationResult } from 'express-validator';
+import { body, param, validationResult } from 'express-validator';
 
 // ─────────────────────────────────────────────────────────────
 // HELPER: Procesar resultados de validación
@@ -35,7 +35,7 @@ export const handleValidationErrors = (req, res, next) => {
 // ─────────────────────────────────────────────────────────────
 // HELPER: Regex de patrones SQL peligrosos
 // ─────────────────────────────────────────────────────────────
-const SQL_INJECTION_PATTERN = /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|TRUNCATE|DECLARE|CAST|CONVERT|CHAR|NCHAR|VARCHAR|SCRIPT)\b|--|;|\/\*|\*\/|xp_|0x[0-9a-fA-F]+)/i;
+const SQL_INJECTION_PATTERN = /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|TRUNCATE|DECLARE|CAST|CONVERT|CHAR|NCHAR|VARCHAR|SCRIPT)\b|--|;|\/\*|\*\/|xp_|0x[\da-f]+)/i;
 
 const noSQLInjection = (value) => {
     if (typeof value === 'string' && SQL_INJECTION_PATTERN.test(value)) {
@@ -58,7 +58,7 @@ export const validateRegister = [
     body('password')
         .isLength({ min: 8, max: 128 }).withMessage('La contraseña debe tener entre 8 y 128 caracteres.')
         .matches(/[A-Z]/).withMessage('La contraseña debe tener al menos una letra mayúscula.')
-        .matches(/[0-9]/).withMessage('La contraseña debe tener al menos un número.'),
+        .matches(/\d/).withMessage('La contraseña debe tener al menos un número.'),
 
     body('full_name')
         .trim()
@@ -161,7 +161,7 @@ export const validateResetPassword = [
     body('newPassword')
         .isLength({ min: 8, max: 128 }).withMessage('La contraseña debe tener entre 8 y 128 caracteres.')
         .matches(/[A-Z]/).withMessage('La contraseña debe tener al menos una letra mayúscula.')
-        .matches(/[0-9]/).withMessage('La contraseña debe tener al menos un número.'),
+        .matches(/\d/).withMessage('La contraseña debe tener al menos un número.'),
 
     handleValidationErrors
 ];

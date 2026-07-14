@@ -1,6 +1,7 @@
 // backend/src/services/rewardService.js
 import * as rewardRepository from '../repositories/rewardRepository.js';
 import { NotFoundError, ValidationError } from '../utils/errors.js';
+import crypto from 'node:crypto';
 
 /**
  * Canjea un cupón de recompensa, descontando espe_coins del usuario.
@@ -25,8 +26,8 @@ export const redeemCoupon = async (userId, couponId, cost) => {
     const newCoins = currentCoins - cost;
     await rewardRepository.updateUserCoins(userId, newCoins);
 
-    // 4. Generar código aleatorio único del cupón
-    const couponCode = 'ESPE-COIN-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    // 4. Generar código aleatorio único del cupón usando RNG criptográfico
+    const couponCode = 'ESPE-COIN-' + crypto.randomBytes(3).toString('hex').toUpperCase();
 
     return {
         couponCode,
