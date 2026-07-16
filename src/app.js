@@ -15,7 +15,6 @@ import rewardRoutes from './routes/rewardRoutes.js';
 const app = express();
 
 // Confiar en los proxies inversos de manera robusta
-app.set('trust proxy', true);
 
 // 1. Cabeceras de seguridad con Helmet
 app.use(helmet());
@@ -62,10 +61,14 @@ const getClientIp = (req) => {
 // 3. Limitación de Tasa (Rate Limiting) robusta y flexible
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutos
-    limit: 1000, // Aumentado a 1000 para evitar bloqueos por navegación normal (SPA)
+    limit: 5000, // Aumentado a 5000 para evitar bloqueos por navegación normal (SPA) e IP compartida (NAT)
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     validate: { trustProxy: false, keyGeneratorIpFallback: false },
+    skip: (req) => 
+        process.env.NODE_ENV === 'development' || 
+        process.env.NODE_ENV === 'test' ||
+        (process.env.BYPASS_RATE_LIMIT_TOKEN && req.headers['x-bypass-rate-limit'] === process.env.BYPASS_RATE_LIMIT_TOKEN),
     keyGenerator: (req) => {
         // Intentar identificar al usuario por su token de autenticación si existe
         const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -79,10 +82,14 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutos
-    limit: 30, // Un poco más flexible para intentos de autenticación
+    limit: 150, // Aumentado a 150 para evitar bloqueos en logins masivos desde la misma IP (ej. universidad)
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     validate: { trustProxy: false, keyGeneratorIpFallback: false },
+    skip: (req) => 
+        process.env.NODE_ENV === 'development' || 
+        process.env.NODE_ENV === 'test' ||
+        (process.env.BYPASS_RATE_LIMIT_TOKEN && req.headers['x-bypass-rate-limit'] === process.env.BYPASS_RATE_LIMIT_TOKEN),
     keyGenerator: (req) => {
         return getClientIp(req);
     },
