@@ -24,7 +24,8 @@ const whitelist = new Set([
     'http://localhost:5173',
     'https://pilas-tutorias.web.app',
     'https://pilas-tutorias.firebaseapp.com',
-    'https://pilas-frontend.vercel.app'
+    'https://pilas-frontend.vercel.app',
+    "https://pilastutorias.space/"
 ]);
 const corsOptions = {
     origin: function (origin, callback) {
@@ -65,8 +66,8 @@ const generalLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     validate: { trustProxy: false, keyGeneratorIpFallback: false },
-    skip: (req) => 
-        process.env.NODE_ENV === 'development' || 
+    skip: (req) =>
+        process.env.NODE_ENV === 'development' ||
         process.env.NODE_ENV === 'test' ||
         (process.env.BYPASS_RATE_LIMIT_TOKEN && req.headers['x-bypass-rate-limit'] === process.env.BYPASS_RATE_LIMIT_TOKEN),
     keyGenerator: (req) => {
@@ -86,8 +87,8 @@ const authLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     validate: { trustProxy: false, keyGeneratorIpFallback: false },
-    skip: (req) => 
-        process.env.NODE_ENV === 'development' || 
+    skip: (req) =>
+        process.env.NODE_ENV === 'development' ||
         process.env.NODE_ENV === 'test' ||
         (process.env.BYPASS_RATE_LIMIT_TOKEN && req.headers['x-bypass-rate-limit'] === process.env.BYPASS_RATE_LIMIT_TOKEN),
     keyGenerator: (req) => {
@@ -129,7 +130,7 @@ app.use((req, res, next) => {
 // Middleware Global de Errores para que siempre retorne JSON y no HTML (Ej. cuando falla un middleware o DB)
 app.use((err, req, res, next) => {
     const statusCode = err.statusCode || (typeof err.status === 'number' ? err.status : 500);
-    
+
     if (statusCode === 500 || !err.isOperational) {
         console.error("Error global interceptado:", err);
     } else {
